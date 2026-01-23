@@ -1,6 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
 
-const DATA_BASE_PATH = import.meta.env.BASE_URL + 'data/'
+// API URL from environment variable or fallback to local data
+const API_URL = import.meta.env.VITE_API_URL
+const DATA_BASE_PATH = API_URL
+  ? `${API_URL}/api/data/`
+  : import.meta.env.BASE_URL + 'data/'
 
 export function useData() {
   const [data, setData] = useState(null)

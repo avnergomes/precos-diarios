@@ -1,13 +1,23 @@
 # SIMA Daily Quotations - Python Dependencies
 
+# Web Framework
+flask>=3.0.0
+flask-cors>=4.0.0
+gunicorn>=21.0.0
+
+# Scheduler
+apscheduler>=3.10.0
+
 # Data processing
 pandas>=2.0.0
 numpy>=1.24.0
 openpyxl>=3.1.0
 xlrd>=2.0.0
 
-# HTTP requests
+# HTTP requests & Web scraping
 requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
 
 # Optional: RAR support
 rarfile>=4.1

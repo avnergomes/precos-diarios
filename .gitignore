@@ -10,11 +10,16 @@ env/
 dashboard/dist/
 *.egg-info/
 
-# Data files (large)
+# Data files (large - regenerated on Render)
 data/raw/
 data/extracted/
+data/scraped/
+data/json/
 *.zip
 *.rar
+
+# Keep processed data for initial deployment
+!data/processed/
 
 # IDE
 .vscode/
@@ -34,6 +39,8 @@ npm-debug.log*
 .env
 .env.local
 .env.*.local
+!.env.example
+!.env.production
 
 # Temporary
 *.tmp
