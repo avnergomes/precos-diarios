@@ -5,6 +5,7 @@ services:
     runtime: python
     region: oregon
     plan: free
+    repo: https://github.com/avfranco/precos-diarios
     buildCommand: |
       pip install -r requirements.txt
       python api/etl_process.py || true
@@ -17,21 +18,3 @@ services:
         value: "3.12"
     autoDeploy: true
     healthCheckPath: /
-
-# Cron jobs for daily data updates
-crons:
-  # Scraping at 12:30 Brasilia (15:30 UTC)
-  - name: daily-scraping
-    schedule: "30 15 * * *"
-    command: |
-      cd /opt/render/project/src &&
-      python api/scraper.py
-
-  # Full pipeline at 13:00 Brasilia (16:00 UTC)
-  - name: daily-data-update
-    schedule: "0 16 * * *"
-    command: |
-      cd /opt/render/project/src &&
-      python api/etl_process.py &&
-      python api/preprocess_data.py
-    healthCheckPath: /api/status
