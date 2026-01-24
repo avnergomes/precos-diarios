@@ -195,22 +195,43 @@ def serve_dashboard(path='index.html'):
     return send_from_directory(dashboard_dir, path)
 
 
+def run_scraper():
+    """Run only the scraper."""
+    logger.info("Starting scraper...")
+    try:
+        from scraper import scrape_latest_quotations
+        scrape_latest_quotations()
+        logger.info("Scraping completed")
+    except Exception as e:
+        logger.error(f"Scraping error: {e}")
+
+
 def init_scheduler():
     """Initialize the background scheduler for daily updates."""
     scheduler = BackgroundScheduler()
 
-    # Run pipeline daily at 8:00 AM (Brasilia time)
+    # Run scraper daily at 12:30 (Brasilia time)
+    scheduler.add_job(
+        run_scraper,
+        'cron',
+        hour=12,
+        minute=30,
+        timezone='America/Sao_Paulo',
+        id='daily_scraper'
+    )
+
+    # Run full pipeline daily at 13:00 (Brasilia time)
     scheduler.add_job(
         run_pipeline,
         'cron',
-        hour=8,
+        hour=13,
         minute=0,
         timezone='America/Sao_Paulo',
         id='daily_pipeline'
     )
 
     scheduler.start()
-    logger.info("Scheduler started - daily updates at 8:00 AM BRT")
+    logger.info("Scheduler started - scraping at 12:30, pipeline at 13:00 BRT")
 
 
 if __name__ == '__main__':
