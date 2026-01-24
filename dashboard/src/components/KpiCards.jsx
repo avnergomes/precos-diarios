@@ -1,7 +1,11 @@
-import { DollarSign, TrendingUp, TrendingDown, Package, BarChart3, MapPin } from 'lucide-react'
+import { DollarSign, TrendingUp, TrendingDown, Package, BarChart3, Calendar } from 'lucide-react'
 import { formatCurrency, formatNumber, formatCompact } from '../utils/format'
 
 export default function KpiCards({ aggregations }) {
+  // Calculate YoY variation
+  const yoyChange = aggregations?.yoyChange || 0
+  const yoyFormatted = yoyChange >= 0 ? `+${yoyChange.toFixed(1)}%` : `${yoyChange.toFixed(1)}%`
+
   const cards = [
     {
       title: 'Preco Medio',
@@ -13,22 +17,13 @@ export default function KpiCards({ aggregations }) {
       iconColor: 'text-primary-600',
     },
     {
-      title: 'Preco Minimo',
-      value: formatCurrency(aggregations?.minPrice || 0),
-      description: 'Menor preco registrado',
-      icon: TrendingDown,
-      color: 'from-secondary-500 to-secondary-600',
-      iconBg: 'bg-secondary-100',
-      iconColor: 'text-secondary-600',
-    },
-    {
-      title: 'Preco Maximo',
-      value: formatCurrency(aggregations?.maxPrice || 0),
-      description: 'Maior preco registrado',
-      icon: TrendingUp,
-      color: 'from-accent-500 to-accent-600',
-      iconBg: 'bg-accent-100',
-      iconColor: 'text-accent-600',
+      title: 'Variacao Anual',
+      value: yoyFormatted,
+      description: 'Comparado ao ano anterior',
+      icon: yoyChange >= 0 ? TrendingUp : TrendingDown,
+      color: yoyChange >= 0 ? 'from-green-500 to-green-600' : 'from-red-500 to-red-600',
+      iconBg: yoyChange >= 0 ? 'bg-green-100' : 'bg-red-100',
+      iconColor: yoyChange >= 0 ? 'text-green-600' : 'text-red-600',
     },
     {
       title: 'Total Registros',
@@ -48,19 +43,10 @@ export default function KpiCards({ aggregations }) {
       iconBg: 'bg-purple-100',
       iconColor: 'text-purple-600',
     },
-    {
-      title: 'Regionais',
-      value: formatNumber(aggregations?.uniqueRegions || 0),
-      description: 'Regioes cobertas',
-      icon: MapPin,
-      color: 'from-teal-500 to-teal-600',
-      iconBg: 'bg-teal-100',
-      iconColor: 'text-teal-600',
-    },
   ]
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {cards.map((card, index) => (
         <div
           key={index}

@@ -75,11 +75,6 @@ export function useFilteredData(data, filters) {
       records = records.filter(r => r.c === filters.categoria)
     }
 
-    // Filter by regional
-    if (filters.regional) {
-      records = records.filter(r => r.r === filters.regional)
-    }
-
     // Filter by product
     if (filters.produto) {
       records = records.filter(r => r.p === filters.produto)
@@ -99,11 +94,10 @@ export function useAggregations(filteredData, data) {
         maxPrice: 0,
         uniqueProducts: 0,
         uniqueCategories: 0,
-        uniqueRegions: 0,
+        yoyChange: 0,
         topProducts: [],
         byCategory: {},
-        byRegional: {},
-        byPeriod: {},
+        sparklineData: {},
       }
     }
 
@@ -121,28 +115,99 @@ export function useAggregations(filteredData, data) {
 
     const products = new Set(filteredData.map(r => r.p))
     const categories = new Set(filteredData.map(r => r.c))
-    const regions = new Set(filteredData.filter(r => r.r).map(r => r.r))
 
-    // Group by product for top products
+    // Calculate YoY (Year over Year) change
+    const years = [...new Set(filteredData.map(r => r.a))].sort((a, b) => b - a)
+    let yoyChange = 0
+    if (years.length >= 2) {
+      const currentYear = years[0]
+      const prevYear = years[1]
+
+      const currentYearPrices = filteredData
+        .filter(r => r.a === currentYear && r.pm > 0)
+        .map(r => r.pm)
+      const prevYearPrices = filteredData
+        .filter(r => r.a === prevYear && r.pm > 0)
+        .map(r => r.pm)
+
+      if (currentYearPrices.length > 0 && prevYearPrices.length > 0) {
+        const currentAvg = currentYearPrices.reduce((a, b) => a + b, 0) / currentYearPrices.length
+        const prevAvg = prevYearPrices.reduce((a, b) => a + b, 0) / prevYearPrices.length
+        yoyChange = prevAvg > 0 ? ((currentAvg - prevAvg) / prevAvg) * 100 : 0
+      }
+    }
+
+    // Group by product for top products with YoY variation
     const productStats = {}
+    const productByYear = {}
+
     filteredData.forEach(r => {
       if (!r.p) return
       if (!productStats[r.p]) {
         productStats[r.p] = { count: 0, sum: 0, categoria: r.c }
+        productByYear[r.p] = {}
       }
       productStats[r.p].count++
-      if (r.pm) productStats[r.p].sum += r.pm
+      if (r.pm) {
+        productStats[r.p].sum += r.pm
+        // Track by year for variation calculation
+        if (!productByYear[r.p][r.a]) {
+          productByYear[r.p][r.a] = { sum: 0, count: 0 }
+        }
+        productByYear[r.p][r.a].sum += r.pm
+        productByYear[r.p][r.a].count++
+      }
     })
 
+    // Calculate product variations and sparkline data
+    const sparklineData = {}
+
     const topProducts = Object.entries(productStats)
-      .map(([produto, stats]) => ({
-        produto,
-        categoria: stats.categoria,
-        media: stats.count > 0 ? stats.sum / stats.count : 0,
-        registros: stats.count,
-      }))
+      .map(([produto, stats]) => {
+        // Calculate YoY variation for this product
+        const productYears = Object.keys(productByYear[produto] || {}).map(Number).sort((a, b) => b - a)
+        let variacao = null
+
+        if (productYears.length >= 2) {
+          const currentYear = productYears[0]
+          const prevYear = productYears[1]
+          const current = productByYear[produto][currentYear]
+          const prev = productByYear[produto][prevYear]
+
+          if (current && prev && current.count > 0 && prev.count > 0) {
+            const currentAvg = current.sum / current.count
+            const prevAvg = prev.sum / prev.count
+            variacao = prevAvg > 0 ? ((currentAvg - prevAvg) / prevAvg) * 100 : null
+          }
+        }
+
+        // Generate sparkline data (monthly averages, last 12 months)
+        const monthlyData = {}
+        filteredData
+          .filter(r => r.p === produto && r.pm > 0)
+          .forEach(r => {
+            const key = `${r.a}-${String(r.m || 1).padStart(2, '0')}`
+            if (!monthlyData[key]) {
+              monthlyData[key] = { sum: 0, count: 0 }
+            }
+            monthlyData[key].sum += r.pm
+            monthlyData[key].count++
+          })
+
+        sparklineData[produto] = Object.entries(monthlyData)
+          .map(([period, s]) => ({ period, value: s.sum / s.count }))
+          .sort((a, b) => a.period.localeCompare(b.period))
+          .slice(-12)
+
+        return {
+          produto,
+          categoria: stats.categoria,
+          media: stats.count > 0 ? stats.sum / stats.count : 0,
+          registros: stats.count,
+          variacao,
+        }
+      })
       .sort((a, b) => b.registros - a.registros)
-      .slice(0, 20)
 
     // Group by category
     const byCategory = {}
@@ -169,25 +234,6 @@ export function useAggregations(filteredData, data) {
       }
     })
 
-    // Group by regional
-    const byRegional = {}
-    filteredData.forEach(r => {
-      if (!r.r) return
-      if (!byRegional[r.r]) {
-        byRegional[r.r] = { count: 0, sum: 0 }
-      }
-      byRegional[r.r].count++
-      if (r.pm) byRegional[r.r].sum += r.pm
-    })
-
-    Object.keys(byRegional).forEach(reg => {
-      const stats = byRegional[reg]
-      byRegional[reg] = {
-        media: stats.count > 0 ? stats.sum / stats.count : 0,
-        registros: stats.count,
-      }
-    })
-
     return {
       totalRecords: filteredData.length,
       avgPrice,
@@ -195,10 +241,10 @@ export function useAggregations(filteredData, data) {
       maxPrice,
       uniqueProducts: products.size,
       uniqueCategories: categories.size,
-      uniqueRegions: regions.size,
+      yoyChange,
       topProducts,
       byCategory,
-      byRegional,
+      sparklineData,
     }
   }, [filteredData, data])
 }

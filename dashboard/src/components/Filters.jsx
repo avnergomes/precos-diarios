@@ -6,7 +6,6 @@ export default function Filters({ filters, setFilters, options }) {
 
   const anos = options?.anos || []
   const categorias = options?.categorias || []
-  const regionais = options?.regionais || []
   const produtos = options?.produtos || []
 
   const hasActiveFilters = Object.values(filters).some(v => v !== null)
@@ -23,7 +22,6 @@ export default function Filters({ filters, setFilters, options }) {
       anoMin: null,
       anoMax: null,
       categoria: null,
-      regional: null,
       produto: null,
     })
   }
@@ -99,14 +97,6 @@ export default function Filters({ filters, setFilters, options }) {
               </button>
             </span>
           )}
-          {filters.regional && (
-            <span className="badge badge-blue flex items-center gap-1">
-              {filters.regional}
-              <button onClick={() => updateFilter('regional', null)}>
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          )}
           {filters.produto && (
             <span className="badge badge-yellow flex items-center gap-1">
               {filters.produto}
@@ -121,7 +111,7 @@ export default function Filters({ filters, setFilters, options }) {
       {/* Filter fields */}
       {isExpanded && (
         <div className="p-4 pt-0 border-t border-dark-100">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 pt-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
             {/* Year Min */}
             <div>
               <label className="block text-sm font-medium text-dark-600 mb-1">
@@ -169,23 +159,6 @@ export default function Filters({ filters, setFilters, options }) {
                 <option value="">Todas</option>
                 {categorias.map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Regional */}
-            <div>
-              <label className="block text-sm font-medium text-dark-600 mb-1">
-                Regional
-              </label>
-              <select
-                value={filters.regional || ''}
-                onChange={(e) => updateFilter('regional', e.target.value || null)}
-                className="filter-select"
-              >
-                <option value="">Todas</option>
-                {regionais.map(reg => (
-                  <option key={reg} value={reg}>{reg}</option>
                 ))}
               </select>
             </div>
