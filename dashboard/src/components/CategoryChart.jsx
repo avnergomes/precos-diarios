@@ -7,18 +7,26 @@ import {
   Cell,
   XAxis,
   YAxis,
+  Label,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   Legend,
 } from 'recharts'
-import { formatCurrency, getCategoryColor, CHART_COLORS } from '../utils/format'
+import {
+  formatCurrency,
+  formatCategoryName,
+  getCategoryColor,
+  CHART_COLORS,
+} from '../utils/format'
 
 export default function CategoryChart({
   data,
   title,
+  description,
   height = 300,
   showPie = false,
+  xAxisLabel = 'Preço médio (R$)',
 }) {
   const [viewMode, setViewMode] = useState(showPie ? 'pie' : 'bar')
 
@@ -26,8 +34,11 @@ export default function CategoryChart({
     return (
       <div className="chart-container">
         <h3 className="chart-title">{title}</h3>
+        {description && (
+          <p className="text-sm text-dark-500 mb-4">{description}</p>
+        )}
         <div className="h-64 flex items-center justify-center text-dark-400">
-          Sem dados disponiveis
+          Sem dados disponíveis
         </div>
       </div>
     )
@@ -36,7 +47,8 @@ export default function CategoryChart({
   // Transform data for Recharts
   const chartData = Object.entries(data)
     .map(([categoria, values]) => ({
-      name: categoria,
+      name: formatCategoryName(categoria),
+      rawName: categoria,
       media: values.media || 0,
       registros: values.registros || 0,
       produtos: values.produtos || 0,
@@ -52,7 +64,7 @@ export default function CategoryChart({
       <div className="bg-white/95 backdrop-blur-sm border border-dark-200 rounded-lg shadow-lg p-3">
         <p className="font-semibold text-dark-800 mb-2">{data.name}</p>
         <p className="text-sm text-dark-600">
-          Preco Medio: {formatCurrency(data.media)}
+          Preço médio: {formatCurrency(data.media)}
         </p>
         <p className="text-sm text-dark-600">
           Registros: {data.registros.toLocaleString('pt-BR')}
@@ -116,6 +128,9 @@ export default function CategoryChart({
           </div>
         )}
       </div>
+      {description && (
+        <p className="text-sm text-dark-500 mb-4">{description}</p>
+      )}
 
       <ResponsiveContainer width="100%" height={height}>
         {viewMode === 'pie' ? (
@@ -158,7 +173,14 @@ export default function CategoryChart({
               tickLine={false}
               axisLine={{ stroke: '#e2e8f0' }}
               tickFormatter={(value) => formatCurrency(value)}
-            />
+            >
+              <Label
+                value={xAxisLabel}
+                position="insideBottom"
+                offset={-5}
+                style={{ fill: '#64748b', fontSize: 11 }}
+              />
+            </XAxis>
             <YAxis
               type="category"
               dataKey="name"

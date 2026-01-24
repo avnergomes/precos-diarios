@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useData, useFilteredData, useAggregations } from './hooks/useData'
 import { useForecast, useForecastProducts } from './hooks/useForecast'
 import Header from './components/Header'
@@ -14,13 +14,14 @@ import ForecastKpis from './components/ForecastKpis'
 import ForecastTable from './components/ForecastTable'
 import Footer from './components/Footer'
 import Loading from './components/Loading'
+import { formatCategoryName } from './utils/format'
 
 const TABS = [
-  { id: 'overview', label: 'Visao Geral', icon: 'LayoutDashboard' },
-  { id: 'evolution', label: 'Evolucao', icon: 'TrendingUp' },
+  { id: 'overview', label: 'Visão geral', icon: 'LayoutDashboard' },
+  { id: 'evolution', label: 'Evolução', icon: 'TrendingUp' },
   { id: 'categories', label: 'Categorias', icon: 'BarChart3' },
   { id: 'products', label: 'Produtos', icon: 'Package' },
-  { id: 'forecast', label: 'Previsoes', icon: 'LineChart' },
+  { id: 'forecast', label: 'Previsões', icon: 'LineChart' },
 ]
 
 function App() {
@@ -44,6 +45,27 @@ function App() {
 
   const filteredData = useFilteredData(data, filters)
   const aggregations = useAggregations(filteredData, data)
+  const metadata = data?.aggregated?.metadata
+  const productCount = data?.aggregated?.by_product
+    ? Object.keys(data.aggregated.by_product).length
+    : null
+
+  const filterSummary = useMemo(() => {
+    const yearMin = filters.anoMin || metadata?.year_min
+    const yearMax = filters.anoMax || metadata?.year_max
+    const periodLabel = yearMin && yearMax ? `${yearMin} - ${yearMax}` : 'Todos os anos'
+    const categoryLabel = filters.categoria
+      ? formatCategoryName(filters.categoria)
+      : 'Todas as categorias'
+    const productLabel = filters.produto || 'Todos os produtos'
+
+    return `Período: ${periodLabel} • Categoria: ${categoryLabel} • Produto: ${productLabel}`
+  }, [filters, metadata])
+
+  const contextLabel = useMemo(() => {
+    const hasFilters = Object.values(filters).some(value => value !== null)
+    return hasFilters ? 'recorte atual' : 'período completo'
+  }, [filters])
 
   if (loading) {
     return <Loading />
@@ -53,9 +75,10 @@ function App() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="text-6xl mb-4">⚠️</div>
-          <h2 className="text-xl font-semibold text-dark-800 mb-2">Erro ao carregar dados</h2>
-          <p className="text-dark-600">{error}</p>
+          <div className="text-2xl font-semibold text-dark-800 mb-2">Erro ao carregar dados</div>
+          <p className="text-dark-600">
+            {error || 'Não foi possível acessar os arquivos de dados.'}
+          </p>
           <button
             onClick={() => window.location.reload()}
             className="mt-4 btn-primary"
@@ -69,13 +92,14 @@ function App() {
 
   return (
     <div className="min-h-screen">
-      <Header metadata={data?.aggregated?.metadata} />
+      <Header metadata={metadata} productCount={productCount} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         <Filters
           filters={filters}
           setFilters={setFilters}
           options={data?.detailed?.filters}
+          metadata={metadata}
         />
 
         <Tabs
@@ -84,24 +108,43 @@ function App() {
           setActiveTab={setActiveTab}
         />
 
+        <div className="text-sm text-dark-500">
+          {filterSummary}
+        </div>
+        <div className="text-xs text-dark-400">
+          Unidade: R$ por unidade de comercialização informada pelo SIMA (varia conforme o produto).
+        </div>
+
         {activeTab === 'overview' && (
-          <div className="space-y-6">
-            <KpiCards aggregations={aggregations} />
+          <div
+            id="tab-panel-overview"
+            role="tabpanel"
+            aria-labelledby="tab-overview"
+            className="space-y-6"
+          >
+            <p className="text-sm text-dark-500">
+              Panorama geral do comportamento dos preços no recorte atual.
+            </p>
+            <KpiCards aggregations={aggregations} contextLabel={contextLabel} />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <TimeSeriesChart
                 data={data?.timeseries?.by_period}
-                title="Evolucao de Precos"
+                title="Evolução de preços"
+                description="Série temporal da média de preços no recorte atual."
+                yAxisLabel="Preço médio (R$)"
               />
               <CategoryChart
                 data={data?.aggregated?.by_category}
-                title="Precos por Categoria"
+                title="Preços por categoria"
+                description="Comparação da média de preços por categoria no recorte atual."
+                xAxisLabel="Preço médio (R$)"
               />
             </div>
 
             <ProductTable
               data={aggregations?.topProducts}
-              title="Top Produtos"
+              title="Top produtos"
               limit={10}
               showSparkline
               sparklineData={aggregations?.sparklineData}
@@ -110,53 +153,77 @@ function App() {
         )}
 
         {activeTab === 'evolution' && (
-          <div className="space-y-6">
+          <div
+            id="tab-panel-evolution"
+            role="tabpanel"
+            aria-labelledby="tab-evolution"
+            className="space-y-6"
+          >
+            <p className="text-sm text-dark-500">
+              Evolução histórica e sazonalidade dos preços no recorte atual.
+            </p>
             <TimeSeriesChart
               data={data?.timeseries?.by_period}
-              title="Evolucao Historica de Precos"
+              title="Evolução histórica de preços"
+              description="Linha de tendência com mínimo, média e máximo por período."
               height={400}
               showMinMax
+              yAxisLabel="Preço (R$)"
             />
 
             <SeasonalHeatmap
               data={filteredData}
-              title="Sazonalidade de Precos (Meses x Anos)"
+              title="Sazonalidade de preços (meses x anos)"
+              description="Linha = mês, coluna = ano, célula = preço médio do produto/categoria selecionado."
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <TimeSeriesChart
                 data={data?.timeseries?.by_category?.['Graos']}
-                title="Evolucao - Graos"
+                title="Evolução - Grãos"
+                description="Média histórica da categoria Grãos no recorte atual."
                 color="#22c55e"
+                yAxisLabel="Preço médio (R$)"
               />
               <TimeSeriesChart
                 data={data?.timeseries?.by_category?.['Hortalicas']}
-                title="Evolucao - Hortalicas"
+                title="Evolução - Hortaliças"
+                description="Média histórica da categoria Hortaliças no recorte atual."
                 color="#f59e0b"
+                yAxisLabel="Preço médio (R$)"
               />
             </div>
           </div>
         )}
 
         {activeTab === 'categories' && (
-          <div className="space-y-6">
+          <div
+            id="tab-panel-categories"
+            role="tabpanel"
+            aria-labelledby="tab-categories"
+            className="space-y-6"
+          >
+            <p className="text-sm text-dark-500">
+              Comparativo entre categorias com médias, faixas e volume de registros.
+            </p>
             <CategoryChart
               data={data?.aggregated?.by_category}
-              title="Distribuicao por Categoria"
+              title="Distribuição por categoria"
+              description="Participação de registros e média de preços por categoria."
               height={400}
               showPie
             />
 
             <div className="card p-6">
-              <h3 className="chart-title">Detalhamento por Categoria</h3>
+              <h3 className="chart-title">Detalhamento por categoria</h3>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="table-header">
                       <th className="px-4 py-3 text-left">Categoria</th>
-                      <th className="px-4 py-3 text-right">Preco Medio</th>
-                      <th className="px-4 py-3 text-right">Minimo</th>
-                      <th className="px-4 py-3 text-right">Maximo</th>
+                      <th className="px-4 py-3 text-right">Preço médio (R$)</th>
+                      <th className="px-4 py-3 text-right">Mínimo (R$)</th>
+                      <th className="px-4 py-3 text-right">Máximo (R$)</th>
                       <th className="px-4 py-3 text-right">Registros</th>
                       <th className="px-4 py-3 text-right">Produtos</th>
                     </tr>
@@ -166,7 +233,7 @@ function App() {
                       .sort((a, b) => b[1].registros - a[1].registros)
                       .map(([cat, stats]) => (
                         <tr key={cat} className="table-row">
-                          <td className="px-4 py-3 font-medium">{cat}</td>
+                          <td className="px-4 py-3 font-medium">{formatCategoryName(cat)}</td>
                           <td className="px-4 py-3 text-right">
                             R$ {stats.media?.toFixed(2)}
                           </td>
@@ -192,10 +259,18 @@ function App() {
         )}
 
         {activeTab === 'products' && (
-          <div className="space-y-6">
+          <div
+            id="tab-panel-products"
+            role="tabpanel"
+            aria-labelledby="tab-products"
+            className="space-y-6"
+          >
+            <p className="text-sm text-dark-500">
+              Ranking de produtos com preço médio, variação anual e tendência recente.
+            </p>
             <ProductTable
               data={aggregations?.topProducts}
-              title="Ranking de Produtos"
+              title="Ranking de produtos"
               limit={50}
               showCategory
               searchable
@@ -206,7 +281,15 @@ function App() {
         )}
 
         {activeTab === 'forecast' && (
-          <div className="space-y-6">
+          <div
+            id="tab-panel-forecast"
+            role="tabpanel"
+            aria-labelledby="tab-forecast"
+            className="space-y-6"
+          >
+            <p className="text-sm text-dark-500">
+              Previsões diárias com ARIMA e Prophet. Horizonte e produto definem o recorte.
+            </p>
             {/* Forecast Controls */}
             <div className="card p-4">
               <div className="flex flex-col sm:flex-row gap-4">
@@ -248,43 +331,48 @@ function App() {
             {/* Forecast Content */}
             {!forecastProduct ? (
               <div className="card p-8 text-center">
-                <div className="text-6xl mb-4">📊</div>
                 <h3 className="text-xl font-semibold text-dark-800 mb-2">
-                  Previsao de Precos
+                  Previsão de preços
                 </h3>
                 <p className="text-dark-500">
-                  Selecione um produto para ver as previsoes com ARIMA e Prophet
+                  Selecione um produto para ver as previsões com ARIMA e Prophet.
                 </p>
               </div>
             ) : forecastLoading ? (
               <div className="card p-8 text-center">
                 <div className="animate-spin w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full mx-auto mb-4" />
-                <p className="text-dark-500">Gerando previsoes...</p>
+                <p className="text-dark-500">Gerando previsões...</p>
               </div>
             ) : forecastError ? (
               <div className="card p-8 text-center">
-                <div className="text-6xl mb-4">⚠️</div>
                 <h3 className="text-xl font-semibold text-dark-800 mb-2">
-                  Erro ao gerar previsao
+                  Erro ao gerar previsão
                 </h3>
-                <p className="text-dark-500">{forecastError}</p>
+                <p className="text-dark-500">
+                  {forecastError || 'Não foi possível gerar previsões para este produto.'}
+                </p>
+                <p className="text-xs text-dark-400 mt-2">
+                  Tente selecionar outro produto ou reduzir o horizonte.
+                </p>
               </div>
             ) : forecastData ? (
               <>
                 <ForecastChart
                   historico={forecastData.historico}
                   modelos={forecastData.modelos}
-                  title={`Previsao: ${forecastProduct}`}
+                  title={`Previsão: ${forecastProduct}`}
+                  description="Linhas históricas e previsões com intervalos de confiança de 95%."
                 />
 
                 <ForecastKpis
                   modelos={forecastData.modelos}
                   historico={forecastData.historico}
+                  horizon={forecastHorizon}
                 />
 
                 <ForecastTable
                   modelos={forecastData.modelos}
-                  title="Previsoes Detalhadas"
+                  title="Previsões detalhadas"
                 />
               </>
             ) : null}
@@ -292,7 +380,7 @@ function App() {
         )}
       </main>
 
-      <Footer />
+      <Footer metadata={metadata} />
     </div>
   )
 }

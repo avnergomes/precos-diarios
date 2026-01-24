@@ -12,7 +12,8 @@ const MONTHS = [
  */
 export default function SeasonalHeatmap({
   data = [],
-  title = 'Sazonalidade de Precos',
+  title = 'Sazonalidade de Preços',
+  description,
   height = 350,
 }) {
   // Process data into month x year matrix
@@ -99,8 +100,11 @@ export default function SeasonalHeatmap({
     return (
       <div className="card p-6">
         <h3 className="chart-title">{title}</h3>
+        {description && (
+          <p className="text-sm text-dark-500 mb-4">{description}</p>
+        )}
         <div className="flex items-center justify-center text-dark-400" style={{ height: height - 80 }}>
-          Sem dados disponiveis para o heatmap
+          Sem dados disponíveis para o heatmap
         </div>
       </div>
     )
@@ -112,6 +116,9 @@ export default function SeasonalHeatmap({
   return (
     <div className="card p-6">
       <h3 className="chart-title">{title}</h3>
+      {description && (
+        <p className="text-sm text-dark-500 mb-4">{description}</p>
+      )}
 
       <div className="overflow-x-auto">
         <div className="inline-block min-w-full">
@@ -181,7 +188,7 @@ export default function SeasonalHeatmap({
 
       {/* Legend */}
       <div className="mt-4 flex items-center justify-center gap-4 text-xs text-dark-500">
-        <span>Menor preco</span>
+        <span>Menor preço</span>
         <div className="flex gap-0.5">
           {[0, 0.25, 0.5, 0.75, 1].map((t) => (
             <div
@@ -193,12 +200,12 @@ export default function SeasonalHeatmap({
             />
           ))}
         </div>
-        <span>Maior preco</span>
+        <span>Maior preço</span>
       </div>
 
       {/* Price range info */}
       <div className="mt-2 text-center text-xs text-dark-400">
-        Faixa: {formatCurrency(minPrice)} - {formatCurrency(maxPrice)}
+        Faixa do recorte atual: {formatCurrency(minPrice)} - {formatCurrency(maxPrice)}
       </div>
     </div>
   )

@@ -1,10 +1,9 @@
 import {
-  LineChart,
-  Line,
   AreaChart,
   Area,
   XAxis,
   YAxis,
+  Label,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
@@ -15,16 +14,21 @@ import { formatCurrency, formatPeriod } from '../utils/format'
 export default function TimeSeriesChart({
   data,
   title,
+  description,
   height = 300,
   showMinMax = false,
   color = '#f59e0b',
+  yAxisLabel = 'Preço médio (R$)',
 }) {
   if (!data || Object.keys(data).length === 0) {
     return (
       <div className="chart-container">
         <h3 className="chart-title">{title}</h3>
+        {description && (
+          <p className="text-sm text-dark-500 mb-4">{description}</p>
+        )}
         <div className="h-64 flex items-center justify-center text-dark-400">
-          Sem dados disponiveis
+          Sem dados disponíveis
         </div>
       </div>
     )
@@ -62,6 +66,9 @@ export default function TimeSeriesChart({
   return (
     <div className="chart-container">
       <h3 className="chart-title">{title}</h3>
+      {description && (
+        <p className="text-sm text-dark-500 mb-4">{description}</p>
+      )}
 
       <ResponsiveContainer width="100%" height={height}>
         {showMinMax ? (
@@ -85,7 +92,15 @@ export default function TimeSeriesChart({
               tickLine={false}
               axisLine={false}
               tickFormatter={(value) => `R$${(value / 1).toFixed(0)}`}
-            />
+            >
+              <Label
+                value={yAxisLabel}
+                angle={-90}
+                position="insideLeft"
+                offset={10}
+                style={{ fill: '#64748b', fontSize: 11 }}
+              />
+            </YAxis>
             <Tooltip content={<CustomTooltip />} />
             <Legend />
             <Area
@@ -95,7 +110,7 @@ export default function TimeSeriesChart({
               fill="none"
               strokeWidth={1}
               strokeDasharray="3 3"
-              name="Maximo"
+              name="Máximo"
             />
             <Area
               type="monotone"
@@ -103,7 +118,7 @@ export default function TimeSeriesChart({
               stroke={color}
               fill="url(#colorMedia)"
               strokeWidth={2}
-              name="Media"
+              name="Média"
             />
             <Area
               type="monotone"
@@ -112,7 +127,7 @@ export default function TimeSeriesChart({
               fill="none"
               strokeWidth={1}
               strokeDasharray="3 3"
-              name="Minimo"
+              name="Mínimo"
             />
           </AreaChart>
         ) : (
@@ -136,7 +151,15 @@ export default function TimeSeriesChart({
               tickLine={false}
               axisLine={false}
               tickFormatter={(value) => `R$${(value / 1).toFixed(0)}`}
-            />
+            >
+              <Label
+                value={yAxisLabel}
+                angle={-90}
+                position="insideLeft"
+                offset={10}
+                style={{ fill: '#64748b', fontSize: 11 }}
+              />
+            </YAxis>
             <Tooltip content={<CustomTooltip />} />
             <Area
               type="monotone"
@@ -144,7 +167,7 @@ export default function TimeSeriesChart({
               stroke={color}
               fill="url(#colorMedia2)"
               strokeWidth={2}
-              name="Preco Medio"
+              name="Preço médio"
             />
           </AreaChart>
         )}

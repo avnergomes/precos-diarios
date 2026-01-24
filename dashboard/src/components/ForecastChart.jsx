@@ -9,6 +9,7 @@ import {
   Legend,
   ResponsiveContainer,
   ReferenceLine,
+  Label,
 } from 'recharts'
 import { formatCurrency } from '../utils/format'
 
@@ -19,8 +20,10 @@ import { formatCurrency } from '../utils/format'
 export default function ForecastChart({
   historico = [],
   modelos = {},
-  title = 'Previsao de Precos',
+  title = 'Previsão de preços',
+  description,
   height = 400,
+  yAxisLabel = 'Preço previsto (R$)',
 }) {
   // Combine historical and forecast data
   const chartData = []
@@ -95,7 +98,7 @@ export default function ForecastChart({
 
         {dataPoint?.historico && (
           <p className="text-sm text-dark-600">
-            Historico: <span className="font-medium">{formatCurrency(dataPoint.historico)}</span>
+            Histórico: <span className="font-medium">{formatCurrency(dataPoint.historico)}</span>
           </p>
         )}
 
@@ -124,6 +127,9 @@ export default function ForecastChart({
     return (
       <div className="card p-6">
         <h3 className="chart-title">{title}</h3>
+        {description && (
+          <p className="text-sm text-dark-500 mb-4">{description}</p>
+        )}
         <div className="flex items-center justify-center text-dark-400" style={{ height: height - 80 }}>
           Sem dados para exibir
         </div>
@@ -134,6 +140,9 @@ export default function ForecastChart({
   return (
     <div className="card p-6">
       <h3 className="chart-title">{title}</h3>
+      {description && (
+        <p className="text-sm text-dark-500 mb-4">{description}</p>
+      )}
 
       <ResponsiveContainer width="100%" height={height}>
         <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -164,7 +173,15 @@ export default function ForecastChart({
             tickLine={false}
             axisLine={false}
             tickFormatter={(value) => `R$${(value / 1).toFixed(0)}`}
-          />
+          >
+            <Label
+              value={yAxisLabel}
+              angle={-90}
+              position="insideLeft"
+              offset={10}
+              style={{ fill: '#64748b', fontSize: 11 }}
+            />
+          </YAxis>
 
           <Tooltip content={<CustomTooltip />} />
 
@@ -173,7 +190,7 @@ export default function ForecastChart({
             height={36}
             formatter={(value) => {
               const labels = {
-                historico: 'Historico',
+                historico: 'Histórico',
                 arima: 'ARIMA',
                 prophet: 'Prophet',
               }
@@ -187,7 +204,7 @@ export default function ForecastChart({
               x={formatDateLabel(lastHistoricalDate)}
               stroke="#9ca3af"
               strokeDasharray="5 5"
-              label={{ value: 'Previsao', position: 'top', fill: '#6b7280', fontSize: 11 }}
+              label={{ value: 'Previsão', position: 'top', fill: '#6b7280', fontSize: 11 }}
             />
           )}
 

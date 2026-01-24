@@ -1,0 +1,159 @@
+1. Texto, linguagem e conteúdo
+Títulos sem acento e com mistura de idiomas: “Cotacoes Diarias SIMA”, “Sistema de Informacao de Mercado Agricola”, “Dashboard interativo para visualizacao…”, tudo sem acentuação.
+​
+
+Mistura de português e inglês no texto de interface (“Dashboard interativo”, “Exportar”, etc.), sem um padrão claro (tudo PT-BR ou tudo EN).
+​
+
+Descrição de período inconsistente: no topo aparece “Periodo 2003 - 2024”, enquanto o rodapé indica “2001- 2026 SIMA”, sugerindo que a série pode começar em 2001 e ir além de 2024, mas isso não está claro na descrição principal.
+​
+
+Falta de unidade de medida em vários pontos: “Preco Medio R$ 150,76” não explica se é por kg, saca, arroba, cabeça, litro etc., o que dificulta a interpretação dos valores.
+​
+
+Texto dos cards (“Media geral de precos”, “Comparado ao ano anterior”, “Cotacoes no periodo”, “Produtos distintos”) é genérico, sem indicar claramente se se referem ao filtro atual ou ao conjunto total de dados.
+​
+
+2. Estrutura geral e navegação (abas)
+Abas disponíveis: “Visao Geral”, “Evolucao”, “Categorias”, “Produtos”, “Previsoes”.
+​
+
+Problemas comuns às abas:
+
+As abas aparecem concatenadas como texto corrido (“Visao GeralEvolucaoCategoriasProdutosPrevisoes”), sem espaçamento/ separação visual clara, o que atrapalha perceber que são botões/abas clicáveis.
+​
+
+Não há indicação visível de qual aba está ativa (não aparece realce, sublinhado ou rótulo “selecionado” no conteúdo textual capturado).
+​
+
+O estado de carregamento é pobre: em algumas rotas aparece apenas “Carregando dados... Aguarde um momento”, sem fallback ou mensagem se houver falha de conexão ou timeout.
+​
+
+Não há explicação textual resumida do que cada aba apresenta (por exemplo, uma frase logo abaixo, “Nesta aba você acompanha a evolução histórica por produto/categoria”).
+​
+
+2.1. Aba “Visao Geral”
+Elementos principais: cards de resumo, gráfico “Evolucao de Precos”, gráfico “Precos por Categoria” e tabela “Top Produtos”.
+​
+
+Problemas específicos:
+
+Cards não indicam claramente o contexto do cálculo (se é todo o período 2003–2024, se respeitam filtros aplicados, etc.).
+​
+
+Gráfico “Evolucao de Precos” mostra anos e valores em R$ (0 a 320), mas o eixo y não está rotulado (ex.: “Preço médio deflacionado (R$/unidade)”), apenas números em R$.
+​
+
+Gráfico “Precos por Categoria” mostra escala em R$ 0,00 a ~600,00 e categorias (Graos, Pecuaria, Florestal, Hortalicas, Outros), mas novamente sem rótulo de eixo informando o que é (média do período, último valor, mediana, etc.).
+​
+
+A legenda “Graos, Pecuaria, Florestal, Hortalicas, Outros” utiliza nomes de categoria sem acento (Grãos, Pecuária, Hortaliças), quebrando consistência com o texto institucional.
+​
+
+2.2. Aba “Evolucao” (evolução histórica)
+Elementos: “Evolucao Historica de Precos”, “Sazonalidade de Precos (Meses x Anos)”, e gráficos “Evolucao - Graos”, “Evolucao - Hortalicas”.
+​
+
+Problemas:
+
+“Evolucao Historica de Precos” traz série temporal com labels de datas (Jan/2003, Abr/2009, etc.) e eixo y de 0 a 320 R$, mas sem explicar se o dado é máximo, médio, deflacionado ou corrente, e sem unidade explícita.
+​
+
+“Sazonalidade de Precos (Meses x Anos)” parece uma matriz ano × mês, mas o texto fica confuso (linhas repetindo “Jan” com valores para anos diferentes). Carece de legenda explicando claramente como ler (ex.: “Linha = ano, coluna = mês, célula = preço médio do produto selecionado”).
+​
+
+Na sazonalidade, o texto “Menor preco / Maior preco / Faixa: R$ 33,87 - R$ 281,51” aparece, mas sem ligação explícita ao produto/serie filtrada, o que pode confundir se o usuário mudar filtros.
+​
+
+Gráficos “Evolucao - Graos” e “Evolucao - Hortalicas” têm eixos em R$ 0 a 4, mas novamente sem indicar o que está sendo medido (ex.: média de preço, preço real, índice).
+​
+
+2.3. Aba “Categorias”
+No conteúdo capturado, a aba “Categorias” parece compartilhar elementos com “Visao Geral” (gráfico por categoria, etc.), mas também aparece em contexto onde a página ainda está “Carregando dados...”.
+​
+
+Problemas:
+
+Não há descrição clara sobre o que a aba “Categorias” faz a mais do que o gráfico “Precos por Categoria” já mostra na visão geral.
+​
+
+Em alguns carregamentos, só aparece “Carregando dados... Aguarde um momento”, sem dados adicionais ou fallback, o que sugere que, em algumas situações, o usuário pode ficar sem feedback se houver erro.
+​
+
+2.4. Aba “Produtos”
+Essa aba deveria detalhar produtos individualmente. No texto capturado, aparecem a tabela “Top Produtos” e métricas relacionadas.
+​
+
+Problemas:
+
+A tabela “Top Produtos” apresenta cabeçalho com 6 colunas (“# | PRODUTO | PRECO MEDIO | VAR% | TENDENCIA | REGISTROS”), mas as primeiras linhas estão inconsistentes:
+
+“Vaca em pe | R$ 156,68 | -1.3% | 2.536” traz apenas 4 campos, faltando o índice “#” e a coluna “TENDENCIA”.
+​
+
+O mesmo problema ocorre com “Boi em pe” e “Soja industrial tipo 1”.
+​
+
+A partir da linha “4 | Cafe em coco | R$ 9,79 | + 37.7% | 2.300”, já aparece o índice “4”, o que sugere erro de renderização/transform na exportação da tabela (campos deslocados).
+​
+
+Coluna “TENDENCIA” não mostra valor algum nas linhas iniciais (pode ser campo previsto para ícone ou texto que não está sendo renderizado/exportado corretamente).
+​
+
+Informação de paginação “Mostrando 10 de 22 produtos” não vem acompanhada de controles visíveis de navegação (próxima página, anterior, etc.) no HTML bruto, o que pode indicar ausência de paginação, ou que depende de JS sem fallback.
+​
+
+O seletor “Top 10 / Top 20 / Top 50 / Top 100” aparece como <select aria-haspopup="menu" value="Top 10" ...><menu><option ...> no texto, indicando um componente customizado que, sem JS, não se comporta como <select> padrão, prejudicando acessibilidade e degradando a exportação.
+​
+
+2.5. Aba “Previsoes”
+No conteúdo das rotas, há casos onde apenas aparece “Carregando dados... Aguarde um momento”.
+​
+
+Problemas:
+
+Ausência de qualquer informação mínima sobre o modelo de previsão (qual método, horizonte, atualização, incerteza, etc.).
+​
+
+Falta de fallback: se o carregamento falha, o usuário fica preso em “Carregando dados...”, sem mensagem de erro ou instrução (ex.: “Tente atualizar a página” ou “Sem previsões para o produto selecionado”).
+​
+
+A própria aba “Previsoes” não tem descrição textual sobre o que o usuário verá ali (previsão diária, mensal, por produto, por categoria).
+​
+
+3. Filtros e controles
+Seção “Filtros” aparece apenas com o texto “Clique para expandir”, sem indicar quais filtros existem (produto, categoria, período, região) até que o usuário clique, o que reduz a descobribilidade dos filtros.
+​
+
+Não há indicação, no texto capturado, de estado dos filtros (por exemplo, texto “Produto: Todos”, “Categoria: Pecuária”, etc. em algum lugar visível), dificultando entender o contexto dos gráficos.
+​
+
+A interação dos filtros com os cards e gráficos não é explicada: não fica claro se os resumos e gráficos são sempre globais ou se respeitam as seleções.
+​
+
+4. Acessibilidade e semântica
+Títulos de gráficos e seções são informativos, mas não há descrição textual alternativa que resuma o que o gráfico mostra (por exemplo, um parágrafo “Em geral, os preços crescem ao longo do período, com pico em 2022”).
+​
+
+Faltam indicações de estado para elementos interativos (abas, filtros, seletores) para leitores de tela: não há menção de aria-selected, aria-expanded, etc. no conteúdo textual coletado.
+​
+
+O seletor customizado de “Top 10 / Top 20…” utiliza <select aria-haspopup="menu"> com <menu> e <option> internos de forma não convencional, o que pode ser problemático para tecnologias assistivas e para navegação por teclado.
+​
+
+5. Consistência de dados e metadados
+Número de registros aparece de duas formas: “Registros 30.569” e “Total Registros 30,6 mil”. Se não forem derivados do mesmo campo e atualizados juntos, podem divergir no futuro.
+​
+
+Período descrito (2003–2024) não bate visualmente com rodapé (2001–2026) e com o ano atual (2026), gerando dúvida sobre se os dados estão atualizados até 2024 ou se existem registros mais recentes ainda não descritos na introdução.
+​
+
+Não há campo explícito de “Última atualização” ou timestamp da base, importante para dados de cotações diárias.
+​
+
+6. Rodapé e links institucionais
+Rodapé mistura faixas de anos (“2026 Cotacoes Diarias SIMA. Dados abertos.” e “2001- 2026 SIMA”) sem explicar que um se refere ao site/projeto e outro ao período de atuação do SIMA.
+​
+
+Links de “SEAB”, “SIMA”, “DERAL” e “IDR-Parana” estão presentes, mas não há link direto para documentação dos dados (dicionário de variáveis, metodologia de coleta, periodicidade, tratamento de outliers, etc.).
+​

@@ -91,7 +91,7 @@ export function formatPeriodFull(period) {
   if (!period) return ''
 
   const months = [
-    'Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho',
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
   ]
 
@@ -127,12 +127,47 @@ export function calculateVariation(current, previous) {
  */
 export const CATEGORY_COLORS = {
   'Graos': '#22c55e',
+  'Grãos': '#22c55e',
   'Hortalicas': '#f59e0b',
+  'Hortaliças': '#f59e0b',
   'Frutas': '#ec4899',
   'Pecuaria': '#8b5cf6',
+  'Pecuária': '#8b5cf6',
   'Insumos': '#06b6d4',
   'Florestal': '#14b8a6',
   'Outros': '#64748b',
+}
+
+/**
+ * Format category names with accents for display
+ */
+export function formatCategoryName(category) {
+  if (!category) return ''
+
+  const labels = {
+    Graos: 'Grãos',
+    Pecuaria: 'Pecuária',
+    Hortalicas: 'Hortaliças',
+  }
+
+  return labels[category] || category
+}
+
+/**
+ * Format ISO date/time for display in PT-BR
+ */
+export function formatDateTime(dateStr) {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  if (Number.isNaN(date.getTime())) return ''
+
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 /**

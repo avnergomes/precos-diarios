@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Search, ChevronUp, ChevronDown, Download, Trophy, TrendingUp, TrendingDown } from 'lucide-react'
-import { formatCurrency, formatNumber, getCategoryColor } from '../utils/format'
+import { formatCurrency, formatNumber, formatCategoryName, getCategoryColor } from '../utils/format'
 import Sparkline from './Sparkline'
 
 export default function ProductTable({
@@ -95,8 +95,8 @@ export default function ProductTable({
 
   const exportCSV = () => {
     const headers = showCategory
-      ? ['Rank', 'Produto', 'Categoria', 'Preco Medio', 'Registros']
-      : ['Rank', 'Produto', 'Preco Medio', 'Registros']
+      ? ['Rank', 'Produto', 'Categoria', 'Preço médio (R$)', 'Registros']
+      : ['Rank', 'Produto', 'Preço médio (R$)', 'Registros']
 
     const rows = filteredData.map(item =>
       showCategory
@@ -118,10 +118,26 @@ export default function ProductTable({
       <div className="chart-container">
         <h3 className="chart-title">{title}</h3>
         <div className="h-64 flex items-center justify-center text-dark-400">
-          Sem dados disponiveis
+          Sem dados disponíveis
         </div>
       </div>
     )
+  }
+
+  const getTrend = (produto) => {
+    const series = sparklineData[produto] || []
+    if (series.length < 2) return { label: 'Sem tendência', direction: 0 }
+
+    const first = series[0]?.value || 0
+    const last = series[series.length - 1]?.value || 0
+    const delta = last - first
+    const threshold = Math.max(Math.abs(first) * 0.02, 0.01)
+
+    if (Math.abs(delta) <= threshold) {
+      return { label: 'Estável', direction: 0 }
+    }
+
+    return { label: delta > 0 ? 'Em alta' : 'Em queda', direction: delta > 0 ? 1 : -1 }
   }
 
   return (
@@ -148,6 +164,7 @@ export default function ProductTable({
             value={displayLimit}
             onChange={(e) => setDisplayLimit(parseInt(e.target.value))}
             className="filter-select w-auto"
+            aria-label="Limite do ranking"
           >
             <option value={10}>Top 10</option>
             <option value={20}>Top 20</option>
@@ -180,7 +197,7 @@ export default function ProductTable({
                 onClick={() => handleSort('media')}
               >
                 <span className="flex items-center justify-end gap-1">
-                  Preco Medio
+                  Preço médio
                   <SortIcon column="media" />
                 </span>
               </th>
@@ -189,12 +206,12 @@ export default function ProductTable({
                 onClick={() => handleSort('variacao')}
               >
                 <span className="flex items-center justify-end gap-1">
-                  Var%
+                  Variação %
                   <SortIcon column="variacao" />
                 </span>
               </th>
               {showSparkline && (
-                <th className="px-3 py-3 text-center w-24">Tendencia</th>
+                <th className="px-3 py-3 text-center w-32">Tendência</th>
               )}
               <th
                 className="px-3 py-3 text-right cursor-pointer hover:bg-dark-100"
@@ -208,17 +225,17 @@ export default function ProductTable({
             </tr>
           </thead>
           <tbody>
-            {filteredData.map((item) => (
+            {filteredData.map((item) => {
+              const trend = getTrend(item.produto)
+
+              return (
               <tr key={item.produto} className="table-row">
                 <td className="px-3 py-3">
                   <span
-                    className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${getRankBadge(item.rank)}`}
+                    className={`inline-flex items-center justify-center gap-1 w-10 h-7 rounded-full text-xs font-bold ${getRankBadge(item.rank)}`}
                   >
-                    {item.rank <= 3 ? (
-                      <Trophy className="w-3.5 h-3.5" />
-                    ) : (
-                      item.rank
-                    )}
+                    <span>{item.rank}</span>
+                    {item.rank <= 3 && <Trophy className="w-3.5 h-3.5" />}
                   </span>
                 </td>
                 <td className="px-3 py-3">
@@ -235,7 +252,7 @@ export default function ProductTable({
                         color: getCategoryColor(item.categoria),
                       }}
                     >
-                      {item.categoria || 'Outros'}
+                      {formatCategoryName(item.categoria) || 'Outros'}
                     </span>
                   </td>
                 )}
@@ -260,13 +277,22 @@ export default function ProductTable({
                 </td>
                 {showSparkline && (
                   <td className="px-3 py-3">
-                    <div className="flex justify-center">
+                    <div className="flex flex-col items-center gap-1">
                       <Sparkline
                         data={sparklineData[item.produto] || []}
                         width={80}
                         height={24}
                         color="auto"
                       />
+                      <span className={`text-xs ${
+                        trend.direction > 0
+                          ? 'text-green-600'
+                          : trend.direction < 0
+                            ? 'text-red-600'
+                            : 'text-dark-400'
+                      }`}>
+                        {trend.label}
+                      </span>
                     </div>
                   </td>
                 )}
@@ -274,14 +300,14 @@ export default function ProductTable({
                   {formatNumber(item.registros)}
                 </td>
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
       </div>
 
       {/* Footer */}
       <div className="mt-4 pt-4 border-t border-dark-100 text-sm text-dark-500 text-center">
-        Mostrando {filteredData.length} de {normalizedData.length} produtos
+        Exibindo {filteredData.length} primeiros de {normalizedData.length} produtos
       </div>
     </div>
   )
