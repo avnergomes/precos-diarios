@@ -38,13 +38,20 @@ services:
       - key: VITE_API_URL
         value: https://precos-diarios-api.onrender.com
 
-# Cron job for daily data updates
+# Cron jobs for daily data updates
 crons:
-  - name: daily-data-update
-    schedule: "0 11 * * *"  # 8:00 AM Brasilia (UTC-3)
+  # Scraping at 12:30 Brasilia (15:30 UTC)
+  - name: daily-scraping
+    schedule: "30 15 * * *"
     command: |
       cd /opt/render/project/src &&
-      python api/scraper.py &&
+      python api/scraper.py
+
+  # Full pipeline at 13:00 Brasilia (16:00 UTC)
+  - name: daily-data-update
+    schedule: "0 16 * * *"
+    command: |
+      cd /opt/render/project/src &&
       python api/etl_process.py &&
       python api/preprocess_data.py
     healthCheckPath: /api/status
