@@ -6,7 +6,7 @@ import { formatCurrency } from '../utils/format'
  */
 export default function ForecastTable({
   modelos = {},
-  title = 'Previsoes Detalhadas',
+  title = 'Previsões detalhadas',
 }) {
   const arima = modelos.arima?.previsoes || []
   const prophet = modelos.prophet?.previsoes || []
@@ -59,7 +59,7 @@ export default function ForecastTable({
       <div className="card p-6">
         <h3 className="chart-title">{title}</h3>
         <div className="text-center text-dark-400 py-8">
-          Nenhuma previsao disponivel
+          Nenhuma previsão disponível
         </div>
       </div>
     )

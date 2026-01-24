@@ -11,7 +11,9 @@ export default function Loading() {
           </div>
         </div>
         <p className="mt-4 text-dark-600 font-medium">Carregando dados...</p>
-        <p className="text-sm text-dark-400">Aguarde um momento</p>
+        <p className="text-sm text-dark-400">
+          Aguarde um momento. Se demorar, recarregue a página.
+        </p>
       </div>
     </div>
   )

@@ -1,7 +1,14 @@
-import { Wheat, Github, ExternalLink, Database, Calendar } from 'lucide-react'
+import { Wheat, Github, ExternalLink, Database, Calendar, Clock } from 'lucide-react'
+import { formatDateTime } from '../utils/format'
 
-export default function Footer() {
+export default function Footer({ metadata }) {
   const currentYear = new Date().getFullYear()
+  const yearRange = metadata
+    ? `${metadata.year_min} - ${metadata.year_max}`
+    : '...'
+  const lastUpdate = metadata?.generated_at
+    ? formatDateTime(metadata.generated_at)
+    : '...'
 
   return (
     <footer className="mt-12 border-t border-dark-200 bg-white/50 backdrop-blur-sm">
@@ -14,12 +21,12 @@ export default function Footer() {
                 <Wheat className="w-5 h-5 text-primary-600" />
               </div>
               <span className="font-display font-bold text-dark-800">
-                Cotacoes Diarias SIMA
+                Cotações Diárias SIMA
               </span>
             </div>
             <p className="text-sm text-dark-500 max-w-xs">
-              Dashboard interativo para visualizacao de precos diarios de produtos
-              agricolas no estado do Parana.
+              Painel interativo para visualização de preços diários de produtos
+              agrícolas no estado do Paraná.
             </p>
           </div>
 
@@ -43,13 +50,24 @@ export default function Footer() {
               </li>
               <li>
                 <span className="text-dark-500">
-                  SIMA - Sistema de Informacao de Mercado Agricola
+                  SIMA - Sistema de Informação de Mercado Agrícola
                 </span>
               </li>
               <li>
                 <span className="text-dark-500">
                   DERAL - Departamento de Economia Rural
                 </span>
+              </li>
+              <li>
+                <a
+                  href="https://www.agricultura.pr.gov.br/Pagina/Cotacao-Diaria-SIMA-2520"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-dark-500 hover:text-primary-600 flex items-center gap-1"
+                >
+                  Documentação e downloads
+                  <ExternalLink className="w-3 h-3" />
+                </a>
               </li>
             </ul>
           </div>
@@ -68,7 +86,7 @@ export default function Footer() {
                   rel="noopener noreferrer"
                   className="text-dark-500 hover:text-primary-600 flex items-center gap-1"
                 >
-                  Repositorio no GitHub
+                  Repositório no GitHub
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </li>
@@ -79,7 +97,7 @@ export default function Footer() {
                   rel="noopener noreferrer"
                   className="text-dark-500 hover:text-primary-600 flex items-center gap-1"
                 >
-                  IDR-Parana
+                  IDR-Paraná
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </li>
@@ -90,17 +108,21 @@ export default function Footer() {
         {/* Bottom bar */}
         <div className="mt-8 pt-8 border-t border-dark-200 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-dark-400">
-            {currentYear} Cotacoes Diarias SIMA. Dados abertos.
+            {currentYear} Cotações Diárias SIMA. Dados abertos.
           </p>
 
           <div className="flex items-center gap-4">
             <span className="badge badge-green flex items-center gap-1">
               <Calendar className="w-3 h-3" />
-              2001-{currentYear}
+              Período {yearRange}
             </span>
             <span className="badge badge-yellow flex items-center gap-1">
               <Database className="w-3 h-3" />
               SIMA
+            </span>
+            <span className="badge badge-blue flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              Atualizado em {lastUpdate}
             </span>
           </div>
         </div>

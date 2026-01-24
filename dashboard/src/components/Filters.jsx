@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Filter, X, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react'
+import { formatCategoryName } from '../utils/format'
 
-export default function Filters({ filters, setFilters, options }) {
+export default function Filters({ filters, setFilters, options, metadata }) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   const anos = options?.anos || []
@@ -27,12 +28,26 @@ export default function Filters({ filters, setFilters, options }) {
   }
 
   const activeFilterCount = Object.values(filters).filter(v => v !== null).length
+  const panelId = 'filters-panel'
+
+  const resolvedYearMin = filters.anoMin || metadata?.year_min
+  const resolvedYearMax = filters.anoMax || metadata?.year_max
+  const periodLabel = resolvedYearMin && resolvedYearMax
+    ? `${resolvedYearMin} - ${resolvedYearMax}`
+    : 'Todos os anos'
+  const categoryLabel = filters.categoria
+    ? formatCategoryName(filters.categoria)
+    : 'Todas as categorias'
+  const productLabel = filters.produto || 'Todos os produtos'
 
   return (
     <div className="card">
       {/* Header */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
+        type="button"
+        aria-expanded={isExpanded}
+        aria-controls={panelId}
         className="w-full flex items-center justify-between p-4 hover:bg-dark-50/50 transition-colors rounded-t-2xl"
       >
         <div className="flex items-center gap-3">
@@ -44,7 +59,7 @@ export default function Filters({ filters, setFilters, options }) {
             <p className="text-sm text-dark-500">
               {activeFilterCount > 0
                 ? `${activeFilterCount} filtro(s) ativo(s)`
-                : 'Clique para expandir'}
+                : 'Produto, categoria e período'}
             </p>
           </div>
         </div>
@@ -58,6 +73,7 @@ export default function Filters({ filters, setFilters, options }) {
               }}
               className="p-2 text-dark-400 hover:text-dark-600 hover:bg-dark-100 rounded-lg transition-colors"
               title="Limpar filtros"
+              aria-label="Limpar filtros"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
@@ -70,13 +86,17 @@ export default function Filters({ filters, setFilters, options }) {
         </div>
       </button>
 
+      <div className="px-4 pb-4 text-xs text-dark-500">
+        Período: {periodLabel} • Categoria: {categoryLabel} • Produto: {productLabel}
+      </div>
+
       {/* Active filter badges */}
       {hasActiveFilters && !isExpanded && (
         <div className="px-4 pb-4 flex flex-wrap gap-2">
           {filters.anoMin && (
             <span className="badge badge-yellow flex items-center gap-1">
               Ano min: {filters.anoMin}
-              <button onClick={() => updateFilter('anoMin', null)}>
+              <button onClick={() => updateFilter('anoMin', null)} aria-label="Remover ano inicial">
                 <X className="w-3 h-3" />
               </button>
             </span>
@@ -84,15 +104,15 @@ export default function Filters({ filters, setFilters, options }) {
           {filters.anoMax && (
             <span className="badge badge-yellow flex items-center gap-1">
               Ano max: {filters.anoMax}
-              <button onClick={() => updateFilter('anoMax', null)}>
+              <button onClick={() => updateFilter('anoMax', null)} aria-label="Remover ano final">
                 <X className="w-3 h-3" />
               </button>
             </span>
           )}
           {filters.categoria && (
             <span className="badge badge-green flex items-center gap-1">
-              {filters.categoria}
-              <button onClick={() => updateFilter('categoria', null)}>
+              {formatCategoryName(filters.categoria)}
+              <button onClick={() => updateFilter('categoria', null)} aria-label="Remover categoria">
                 <X className="w-3 h-3" />
               </button>
             </span>
@@ -100,7 +120,7 @@ export default function Filters({ filters, setFilters, options }) {
           {filters.produto && (
             <span className="badge badge-yellow flex items-center gap-1">
               {filters.produto}
-              <button onClick={() => updateFilter('produto', null)}>
+              <button onClick={() => updateFilter('produto', null)} aria-label="Remover produto">
                 <X className="w-3 h-3" />
               </button>
             </span>
@@ -110,12 +130,12 @@ export default function Filters({ filters, setFilters, options }) {
 
       {/* Filter fields */}
       {isExpanded && (
-        <div className="p-4 pt-0 border-t border-dark-100">
+        <div id={panelId} className="p-4 pt-0 border-t border-dark-100">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
             {/* Year Min */}
             <div>
               <label className="block text-sm font-medium text-dark-600 mb-1">
-                Ano Inicial
+                Ano inicial
               </label>
               <select
                 value={filters.anoMin || ''}
@@ -132,7 +152,7 @@ export default function Filters({ filters, setFilters, options }) {
             {/* Year Max */}
             <div>
               <label className="block text-sm font-medium text-dark-600 mb-1">
-                Ano Final
+                Ano final
               </label>
               <select
                 value={filters.anoMax || ''}
@@ -158,7 +178,7 @@ export default function Filters({ filters, setFilters, options }) {
               >
                 <option value="">Todas</option>
                 {categorias.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
+                  <option key={cat} value={cat}>{formatCategoryName(cat)}</option>
                 ))}
               </select>
             </div>

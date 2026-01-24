@@ -1,34 +1,34 @@
-import { DollarSign, TrendingUp, TrendingDown, Package, BarChart3, Calendar } from 'lucide-react'
-import { formatCurrency, formatNumber, formatCompact } from '../utils/format'
+import { DollarSign, TrendingUp, TrendingDown, Package, BarChart3 } from 'lucide-react'
+import { formatCurrency, formatNumber } from '../utils/format'
 
-export default function KpiCards({ aggregations }) {
+export default function KpiCards({ aggregations, contextLabel = 'recorte atual' }) {
   // Calculate YoY variation
   const yoyChange = aggregations?.yoyChange || 0
   const yoyFormatted = yoyChange >= 0 ? `+${yoyChange.toFixed(1)}%` : `${yoyChange.toFixed(1)}%`
 
   const cards = [
     {
-      title: 'Preco Medio',
+      title: 'Preço médio (R$)',
       value: formatCurrency(aggregations?.avgPrice || 0),
-      description: 'Media geral de precos',
+      description: `Média no ${contextLabel}`,
       icon: DollarSign,
       color: 'from-primary-500 to-primary-600',
       iconBg: 'bg-primary-100',
       iconColor: 'text-primary-600',
     },
     {
-      title: 'Variacao Anual',
+      title: 'Variação anual',
       value: yoyFormatted,
-      description: 'Comparado ao ano anterior',
+      description: `Comparado ao ano anterior no ${contextLabel}`,
       icon: yoyChange >= 0 ? TrendingUp : TrendingDown,
       color: yoyChange >= 0 ? 'from-green-500 to-green-600' : 'from-red-500 to-red-600',
       iconBg: yoyChange >= 0 ? 'bg-green-100' : 'bg-red-100',
       iconColor: yoyChange >= 0 ? 'text-green-600' : 'text-red-600',
     },
     {
-      title: 'Total Registros',
-      value: formatCompact(aggregations?.totalRecords || 0),
-      description: 'Cotacoes no periodo',
+      title: 'Total de registros',
+      value: formatNumber(aggregations?.totalRecords || 0),
+      description: `Cotações no ${contextLabel}`,
       icon: BarChart3,
       color: 'from-blue-500 to-blue-600',
       iconBg: 'bg-blue-100',
@@ -37,7 +37,7 @@ export default function KpiCards({ aggregations }) {
     {
       title: 'Produtos',
       value: formatNumber(aggregations?.uniqueProducts || 0),
-      description: 'Produtos distintos',
+      description: `Produtos distintos no ${contextLabel}`,
       icon: Package,
       color: 'from-purple-500 to-purple-600',
       iconBg: 'bg-purple-100',

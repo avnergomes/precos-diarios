@@ -4,7 +4,7 @@ import { formatCurrency } from '../utils/format'
 /**
  * ForecastKpis - Display comparison metrics for ARIMA and Prophet models
  */
-export default function ForecastKpis({ modelos = {}, historico = [] }) {
+export default function ForecastKpis({ modelos = {}, historico = [], horizon = 30 }) {
   const arima = modelos.arima
   const prophet = modelos.prophet
 
@@ -41,7 +41,7 @@ export default function ForecastKpis({ modelos = {}, historico = [] }) {
           <div className="grid grid-cols-2 gap-4">
             {/* Forecast Price */}
             <div>
-              <p className="text-xs text-dark-500 mb-1">Previsao 30d</p>
+              <p className="text-xs text-dark-500 mb-1">Previsão {horizon}d</p>
               <p className="text-xl font-bold text-blue-600">
                 {formatCurrency(arimaForecast)}
               </p>
@@ -88,7 +88,7 @@ export default function ForecastKpis({ modelos = {}, historico = [] }) {
           <div className="grid grid-cols-2 gap-4">
             {/* Forecast Price */}
             <div>
-              <p className="text-xs text-dark-500 mb-1">Previsao 30d</p>
+              <p className="text-xs text-dark-500 mb-1">Previsão {horizon}d</p>
               <p className="text-xl font-bold text-green-600">
                 {formatCurrency(prophetForecast)}
               </p>
@@ -120,7 +120,7 @@ export default function ForecastKpis({ modelos = {}, historico = [] }) {
       {/* No models available */}
       {!arima && !prophet && (
         <div className="col-span-2 card p-6 text-center text-dark-400">
-          Nenhum modelo de previsao disponivel
+          Nenhum modelo de previsão disponível
         </div>
       )}
     </div>

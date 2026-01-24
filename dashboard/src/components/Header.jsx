@@ -1,12 +1,21 @@
-import { Wheat, Calendar, Package, MapPin } from 'lucide-react'
+import { Wheat, Calendar, Package, MapPin, Clock } from 'lucide-react'
+import { formatNumber, formatDateTime } from '../utils/format'
 
-export default function Header({ metadata }) {
+export default function Header({ metadata, productCount }) {
   const yearRange = metadata
     ? `${metadata.year_min} - ${metadata.year_max}`
     : '...'
 
-  const totalRecords = metadata?.total_records?.toLocaleString('pt-BR') || '...'
-  const uniqueProducts = metadata?.unique_products || '...'
+  const totalRecords = metadata?.total_records
+    ? formatNumber(metadata.total_records)
+    : '...'
+  const uniqueProductsValue = metadata?.unique_products ?? productCount
+  const uniqueProducts = Number.isFinite(uniqueProductsValue)
+    ? formatNumber(uniqueProductsValue)
+    : '...'
+  const lastUpdate = metadata?.generated_at
+    ? formatDateTime(metadata.generated_at)
+    : '...'
 
   return (
     <header className="relative overflow-hidden grain-overlay">
@@ -36,17 +45,21 @@ export default function Header({ metadata }) {
               </div>
               <div>
                 <h1 className="text-2xl md:text-3xl font-bold text-white font-display">
-                  Cotacoes Diarias SIMA
+                  Cotações Diárias SIMA
                 </h1>
                 <p className="text-primary-100 text-sm md:text-base">
-                  Sistema de Informacao de Mercado Agricola
+                  Sistema de Informação de Mercado Agrícola
                 </p>
               </div>
             </div>
 
             <p className="text-primary-100 max-w-xl text-sm md:text-base">
-              Acompanhe os precos diarios de produtos agricolas no estado do Parana.
+              Acompanhe os preços diários de produtos agrícolas no estado do Paraná.
               Dados coletados pela Secretaria de Estado da Agricultura e do Abastecimento (SEAB).
+            </p>
+            <p className="text-primary-100 text-xs md:text-sm">
+              Valores em R$ por unidade de comercialização informada pelo SIMA.
+              A unidade varia conforme o produto.
             </p>
           </div>
 
@@ -55,7 +68,7 @@ export default function Header({ metadata }) {
             <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg backdrop-blur-sm">
               <Calendar className="w-5 h-5 text-primary-200" />
               <div>
-                <p className="text-xs text-primary-200">Periodo</p>
+                <p className="text-xs text-primary-200">Período dos dados</p>
                 <p className="text-white font-semibold">{yearRange}</p>
               </div>
             </div>
@@ -73,6 +86,14 @@ export default function Header({ metadata }) {
               <div>
                 <p className="text-xs text-primary-200">Registros</p>
                 <p className="text-white font-semibold">{totalRecords}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg backdrop-blur-sm">
+              <Clock className="w-5 h-5 text-primary-200" />
+              <div>
+                <p className="text-xs text-primary-200">Última atualização</p>
+                <p className="text-white font-semibold">{lastUpdate}</p>
               </div>
             </div>
           </div>
