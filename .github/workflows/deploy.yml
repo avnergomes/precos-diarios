@@ -1,4 +1,4 @@
-name: Deploy Dashboard
+name: Deploy Dashboard to GitHub Pages
 
 on:
   push:
@@ -34,6 +34,8 @@ jobs:
 
       - name: Build
         working-directory: dashboard
+        env:
+          VITE_API_URL: https://precos-diarios-api.onrender.com
         run: npm run build
 
       - name: Setup Pages
