@@ -2,16 +2,16 @@ import {
   LayoutDashboard,
   TrendingUp,
   BarChart3,
-  MapPin,
   Package,
+  LineChart,
 } from 'lucide-react'
 
 const ICONS = {
   LayoutDashboard,
   TrendingUp,
   BarChart3,
-  MapPin,
   Package,
+  LineChart,
 }
 
 export default function Tabs({ tabs, activeTab, setActiveTab }) {

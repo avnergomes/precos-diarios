@@ -184,6 +184,78 @@ def get_filters():
     return jsonify(data)
 
 
+@app.route('/api/forecast/<produto>')
+def get_forecast(produto):
+    """
+    Get price forecast for a specific product.
+
+    Args:
+        produto: Product name (URL encoded)
+
+    Query params:
+        horizonte: Forecast horizon in days (default: 30)
+        modelo: Model to use ('arima', 'prophet', 'all') (default: 'all')
+
+    Returns:
+        JSON with historical data, predictions, and metrics
+    """
+    from flask import request
+
+    try:
+        horizonte = request.args.get('horizonte', 30, type=int)
+        modelo = request.args.get('modelo', 'all')
+
+        # Validate horizon
+        horizonte = max(7, min(365, horizonte))
+
+        # Import forecasting module
+        from forecast import generate_forecast, get_available_products
+
+        # Check if product exists
+        available = get_available_products()
+        if produto not in available:
+            return jsonify({
+                'success': False,
+                'error': f'Produto nao encontrado: {produto}',
+                'produtos_disponiveis': available[:10],
+            }), 404
+
+        # Generate forecast
+        result = generate_forecast(produto, horizonte)
+
+        # Filter by model if specified
+        if modelo != 'all' and modelo in result.get('modelos', {}):
+            result['modelos'] = {modelo: result['modelos'][modelo]}
+
+        return jsonify(result)
+
+    except Exception as e:
+        logger.error(f"Forecast error for {produto}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/forecast/produtos')
+def get_forecast_products():
+    """Get list of products available for forecasting."""
+    try:
+        from forecast import get_available_products
+        products = get_available_products()
+        return jsonify({
+            'success': True,
+            'produtos': products,
+            'total': len(products),
+        })
+    except Exception as e:
+        logger.error(f"Error getting forecast products: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 # Serve static dashboard files
 @app.route('/dashboard')
 @app.route('/dashboard/<path:path>')

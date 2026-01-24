@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
-import { Search, ChevronUp, ChevronDown, Download, Trophy } from 'lucide-react'
+import { Search, ChevronUp, ChevronDown, Download, Trophy, TrendingUp, TrendingDown } from 'lucide-react'
 import { formatCurrency, formatNumber, getCategoryColor } from '../utils/format'
+import Sparkline from './Sparkline'
 
 export default function ProductTable({
   data,
@@ -8,6 +9,8 @@ export default function ProductTable({
   limit = 20,
   showCategory = false,
   searchable = false,
+  showSparkline = false,
+  sparklineData = {},
 }) {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('registros')
@@ -33,6 +36,7 @@ export default function ProductTable({
       minimo: stats.minimo || 0,
       maximo: stats.maximo || 0,
       registros: stats.registros || 0,
+      variacao: stats.variacao || null,
       rank: index + 1,
     }))
   }, [data])
@@ -182,6 +186,18 @@ export default function ProductTable({
               </th>
               <th
                 className="px-3 py-3 text-right cursor-pointer hover:bg-dark-100"
+                onClick={() => handleSort('variacao')}
+              >
+                <span className="flex items-center justify-end gap-1">
+                  Var%
+                  <SortIcon column="variacao" />
+                </span>
+              </th>
+              {showSparkline && (
+                <th className="px-3 py-3 text-center w-24">Tendencia</th>
+              )}
+              <th
+                className="px-3 py-3 text-right cursor-pointer hover:bg-dark-100"
                 onClick={() => handleSort('registros')}
               >
                 <span className="flex items-center justify-end gap-1">
@@ -226,6 +242,34 @@ export default function ProductTable({
                 <td className="px-3 py-3 text-right font-medium">
                   {formatCurrency(item.media)}
                 </td>
+                <td className="px-3 py-3 text-right">
+                  {item.variacao !== undefined && item.variacao !== null ? (
+                    <span className={`inline-flex items-center gap-1 font-medium ${
+                      item.variacao >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {item.variacao >= 0 ? (
+                        <TrendingUp className="w-3 h-3" />
+                      ) : (
+                        <TrendingDown className="w-3 h-3" />
+                      )}
+                      {item.variacao >= 0 ? '+' : ''}{item.variacao.toFixed(1)}%
+                    </span>
+                  ) : (
+                    <span className="text-dark-300">-</span>
+                  )}
+                </td>
+                {showSparkline && (
+                  <td className="px-3 py-3">
+                    <div className="flex justify-center">
+                      <Sparkline
+                        data={sparklineData[item.produto] || []}
+                        width={80}
+                        height={24}
+                        color="auto"
+                      />
+                    </div>
+                  </td>
+                )}
                 <td className="px-3 py-3 text-right text-dark-500">
                   {formatNumber(item.registros)}
                 </td>
