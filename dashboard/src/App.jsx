@@ -49,6 +49,8 @@ function App() {
   const productCount = data?.aggregated?.by_product
     ? Object.keys(data.aggregated.by_product).length
     : null
+  const fallbackForecastProducts = data?.filters?.produtos || []
+  const forecastOptions = forecastProducts?.length ? forecastProducts : fallbackForecastProducts
 
   const filterSummary = useMemo(() => {
     const yearMin = filters.anoMin || metadata?.year_min
@@ -135,7 +137,7 @@ function App() {
                 yAxisLabel="Preço médio (R$)"
               />
               <CategoryChart
-                data={data?.aggregated?.by_category}
+                data={aggregations?.byCategory}
                 title="Preços por categoria"
                 description="Comparação da média de preços por categoria no recorte atual."
                 xAxisLabel="Preço médio (R$)"
@@ -207,7 +209,7 @@ function App() {
               Comparativo entre categorias com médias, faixas e volume de registros.
             </p>
             <CategoryChart
-              data={data?.aggregated?.by_category}
+              data={aggregations?.byCategory}
               title="Distribuição por categoria"
               description="Participação de registros e média de preços por categoria."
               height={400}
@@ -229,7 +231,7 @@ function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {Object.entries(data?.aggregated?.by_category || {})
+                    {Object.entries(aggregations?.byCategory || {})
                       .sort((a, b) => b[1].registros - a[1].registros)
                       .map(([cat, stats]) => (
                         <tr key={cat} className="table-row">
@@ -303,7 +305,7 @@ function App() {
                     className="filter-select"
                   >
                     <option value="">Selecione um produto</option>
-                    {forecastProducts.map(prod => (
+                    {forecastOptions.map(prod => (
                       <option key={prod} value={prod}>{prod}</option>
                     ))}
                   </select>

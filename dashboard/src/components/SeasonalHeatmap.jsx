@@ -29,7 +29,7 @@ export default function SeasonalHeatmap({
 
     data.forEach(record => {
       const year = record.a || record.ano
-      const month = record.m || record.mes || 1
+      const month = getRecordMonth(record)
       const price = record.pm || record.preco_medio
 
       if (!year || !price || price <= 0) return
@@ -209,4 +209,17 @@ export default function SeasonalHeatmap({
       </div>
     </div>
   )
+}
+
+function getRecordMonth(record) {
+  if (record?.m) return record.m
+  if (record?.mes) return record.mes
+  if (record?.d && typeof record.d === 'string') {
+    const parts = record.d.split('-')
+    if (parts.length >= 2) {
+      const month = parseInt(parts[1], 10)
+      if (!Number.isNaN(month)) return month
+    }
+  }
+  return 1
 }

@@ -52,6 +52,36 @@ CATEGORIAS = {
     'EUCALIPTO': 'Florestal', 'ERVA-MATE': 'Florestal',
 }
 
+METRIC_LABELS = {
+    'MIN', 'MINIMO', 'MÍNIMO',
+    'M_C', 'MC', 'MEDIA', 'MÉDIA',
+    'MAX', 'MÁX', 'MAXIMO', 'MÁXIMO',
+}
+
+MONTHS_PT = {
+    'JAN': 1, 'JANEIRO': 1,
+    'FEV': 2, 'FEVEREIRO': 2,
+    'MAR': 3, 'MARCO': 3, 'MARÇO': 3,
+    'ABR': 4, 'ABRIL': 4,
+    'MAI': 5, 'MAIO': 5,
+    'JUN': 6, 'JUNHO': 6,
+    'JUL': 7, 'JULHO': 7,
+    'AGO': 8, 'AGOSTO': 8,
+    'SET': 9, 'SETEMBRO': 9,
+    'OUT': 10, 'OUTUBRO': 10,
+    'NOV': 11, 'NOVEMBRO': 11,
+    'DEZ': 12, 'DEZEMBRO': 12,
+}
+
+UNIT_PATTERNS = [
+    r'sc\\s*60\\s*kg', r'sc\\s*50\\s*kg', r'sc\\s*30\\s*kg',
+    r'saca\\s*60\\s*kg', r'saca\\s*50\\s*kg',
+    r'kg\\s*renda', r'kg', r'litro', r'l\\b', r'ml',
+    r'arroba', r'@', r'tonelada', r't\\b',
+    r'caixa', r'cx', r'unidade', r'unid\\.?', r'd\\.?z', r'duzia',
+    r'cabeça', r'cabeca',
+]
+
 
 def normalize_text(text: str) -> str:
     """Normalize text by removing accents and converting to uppercase."""
@@ -73,6 +103,26 @@ def detect_category(product: str) -> str:
 
 def parse_date_from_sheet(sheet_name: str, filename: str) -> Optional[datetime]:
     """Parse date from sheet name or filename."""
+    # Prefer explicit YYYY-MM-DD or DD-MM-YYYY in filename (daily files).
+    filename_patterns = [
+        r'(\d{4})[-_](\d{2})[-_](\d{2})',  # YYYY-MM-DD
+        r'(\d{2})[-_](\d{2})[-_](\d{4})',  # DD-MM-YYYY
+    ]
+
+    for pattern in filename_patterns:
+        match = re.search(pattern, filename)
+        if match:
+            parts = [int(p) for p in match.groups()]
+            if len(parts) == 3:
+                if pattern.startswith(r'(\d{4})'):
+                    year, month, day = parts
+                else:
+                    day, month, year = parts
+                try:
+                    return datetime(year, month, day)
+                except ValueError:
+                    continue
+
     # Try sheet name first (format: DD-MM-YY or DD-MM-YYYY)
     patterns = [
         r'(\d{2})-(\d{2})-(\d{2,4})',  # DD-MM-YY or DD-MM-YYYY
@@ -104,6 +154,152 @@ def parse_date_from_sheet(sheet_name: str, filename: str) -> Optional[datetime]:
             except ValueError:
                 continue
 
+    # Try using sheet day + filename month/year
+    day_match = re.fullmatch(r'\d{1,2}', sheet_name.strip())
+    if day_match:
+        day = int(day_match.group(0))
+        month, year = extract_month_year(filename)
+        if month and year:
+            try:
+                return datetime(year, month, day)
+            except ValueError:
+                pass
+
+    # Try month/year only (fallback to first day)
+    month, year = extract_month_year(sheet_name)
+    if not month or not year:
+        month, year = extract_month_year(filename)
+    if month and year:
+        try:
+            return datetime(year, month, 1)
+        except ValueError:
+            return None
+
+    return None
+
+
+def extract_month_year(text: str) -> Tuple[Optional[int], Optional[int]]:
+    """Extract month/year from filename or sheet name."""
+    if not text:
+        return None, None
+
+    text_norm = normalize_text(text)
+
+    month = None
+    for key, value in MONTHS_PT.items():
+        if key in text_norm:
+            month = value
+            break
+
+    year = None
+    year_match = re.search(r'(19|20)\d{2}', text_norm)
+    if year_match:
+        year = int(year_match.group(0))
+
+    if month and not year:
+        year_two = re.search(r'(\d{2})$', text_norm)
+        if year_two:
+            year_val = int(year_two.group(1))
+            year = 2000 + year_val if year_val < 50 else 1900 + year_val
+
+    if not month or not year:
+        numeric_match = re.search(r'(\d{2})[\-_ ]?(\d{2})(?!\d)', text_norm)
+        if numeric_match:
+            month_val = int(numeric_match.group(1))
+            year_val = int(numeric_match.group(2))
+            if 1 <= month_val <= 12:
+                month = month or month_val
+                year = year or (2000 + year_val if year_val < 50 else 1900 + year_val)
+
+    return month, year
+
+
+def normalize_unit(unit: str) -> str:
+    """Normalize unit strings to consistent labels."""
+    if not unit:
+        return ''
+    unit_norm = normalize_text(unit).lower()
+    unit_norm = re.sub(r'\\s+', ' ', unit_norm).strip()
+
+    replacements = {
+        'sc60kg': 'sc 60 Kg',
+        'sc 60 kg': 'sc 60 Kg',
+        'saca 60 kg': 'sc 60 Kg',
+        'sc 50 kg': 'sc 50 Kg',
+        'saca 50 kg': 'sc 50 Kg',
+        'kg renda': 'kg renda',
+        'arroba': 'arroba',
+        '@': 'arroba',
+        'tonelada': 'tonelada',
+        'kg': 'kg',
+        'litro': 'litro',
+        'l': 'litro',
+        'ml': 'ml',
+        'unidade': 'unid.',
+        'unid.': 'unid.',
+        'unid': 'unid.',
+        'cx': 'caixa',
+        'caixa': 'caixa',
+        'cabeça': 'cabeça',
+        'cabeca': 'cabeça',
+        'dz': 'dúzia',
+        'duzia': 'dúzia',
+    }
+
+    return replacements.get(unit_norm, unit.strip())
+
+
+def split_product_unit(text: str) -> Tuple[str, Optional[str]]:
+    """Split product name and unit from a combined string."""
+    if not text:
+        return '', None
+
+    raw = re.sub(r'\\s+', ' ', str(text)).strip()
+    unit_found = None
+
+    for pattern in UNIT_PATTERNS:
+        match = re.search(pattern, raw, flags=re.IGNORECASE)
+        if match:
+            unit_found = match.group(0)
+            raw = (raw[:match.start()] + raw[match.end():]).strip()
+            break
+
+    product = raw.strip()
+    unit_norm = normalize_unit(unit_found) if unit_found else None
+
+    if unit_norm == 'kg':
+        lower = product.lower()
+        if lower.endswith('sc 50') or lower.endswith('sc50'):
+            product = product[:-5].strip()
+            unit_norm = 'sc 50 Kg'
+        elif lower.endswith('sc 60') or lower.endswith('sc60'):
+            product = product[:-5].strip()
+            unit_norm = 'sc 60 Kg'
+        elif lower.endswith('renda'):
+            product = product[:-5].strip()
+            unit_norm = 'kg renda'
+
+    return product.strip(), unit_norm
+
+
+def detect_metric_label(value) -> Optional[str]:
+    """Detect metric label in a cell."""
+    if pd.isna(value):
+        return None
+    text = normalize_text(str(value))
+    text = text.replace('.', '').replace('-', '').strip()
+    if text in METRIC_LABELS:
+        return text
+    return None
+
+
+def find_unit_column(headers: List) -> Optional[int]:
+    """Find the column containing unit information."""
+    for idx, val in enumerate(headers):
+        if pd.notna(val):
+            val_lower = str(val).lower()
+            if 'unid' in val_lower or 'unidade' in val_lower:
+                return idx
     return None
 
 
@@ -176,65 +372,169 @@ def process_sheet(df: pd.DataFrame, date: datetime, filename: str) -> List[dict]
 
     # Get column headers
     headers = df.iloc[header_row].tolist()
+    unit_col = find_unit_column(headers)
 
-    # Find price columns (look for patterns like regional names or "preco", "min", "max")
-    price_cols = []
-    for idx, h in enumerate(headers):
-        if pd.notna(h):
-            h_str = str(h).upper()
-            # Skip product-related columns
-            if any(kw in h_str for kw in ['PRODUTO', 'DESCRI', 'ITEM', 'UNID', 'ESPEC']):
+    # Detect metric-based layout (MIN/M_C/MÁX)
+    metric_hits = 0
+    for row_idx in range(header_row + 1, min(header_row + 30, len(df))):
+        metric = detect_metric_label(df.iloc[row_idx].iloc[product_col + 1] if product_col + 1 < len(df.columns) else None)
+        if metric:
+            metric_hits += 1
+    is_metric_layout = metric_hits >= 3
+
+    if is_metric_layout:
+        current_parts = []
+        current_unit = None
+        current_min = None
+        current_mean = None
+        current_max = None
+        current_prices = 0
+
+        def flush_record():
+            nonlocal current_parts, current_unit, current_min, current_mean, current_max, current_prices
+            if not current_parts:
+                return
+            product_text = ' '.join(p for p in current_parts if p).strip()
+            product_text = re.sub(r'\\s+', ' ', product_text).strip()
+            product, unit = split_product_unit(product_text)
+            unit = unit or current_unit
+
+            if not product:
+                return
+
+            preco_medio = current_mean if current_mean is not None else current_min or current_max
+            if preco_medio is None:
+                return
+
+            record = {
+                'data': date.strftime('%Y-%m-%d') if date else None,
+                'ano': date.year if date else None,
+                'mes': date.month if date else None,
+                'dia': date.day if date else None,
+                'produto': product,
+                'unidade': unit,
+                'categoria': detect_category(product),
+                'preco_medio': round(float(preco_medio), 2),
+                'preco_minimo': round(float(current_min if current_min is not None else preco_medio), 2),
+                'preco_maximo': round(float(current_max if current_max is not None else preco_medio), 2),
+                'num_cotacoes': current_prices,
+                'arquivo': filename,
+            }
+            records.append(record)
+
+            current_parts = []
+            current_unit = None
+            current_min = None
+            current_mean = None
+            current_max = None
+            current_prices = 0
+
+        for row_idx in range(header_row + 1, len(df)):
+            row = df.iloc[row_idx]
+            metric_col_idx = product_col + 1
+            metric_label = detect_metric_label(row.iloc[metric_col_idx] if metric_col_idx < len(row) else None)
+
+            if not metric_label:
                 continue
-            # This might be a regional or price column
-            price_cols.append(idx)
 
-    # Process data rows
-    for row_idx in range(header_row + 1, len(df)):
-        row = df.iloc[row_idx]
+            product_cell = row.iloc[product_col] if product_col < len(row) else None
+            if pd.notna(product_cell) and str(product_cell).strip():
+                text = str(product_cell).strip()
+                if current_parts and metric_label in ['MIN', 'MINIMO', 'MÍNIMO']:
+                    flush_record()
+                current_parts.append(text)
 
-        # Get product name
-        product = row.iloc[product_col] if product_col < len(row) else None
-        if pd.isna(product) or not str(product).strip():
-            continue
+            if unit_col is not None and unit_col < len(row):
+                unit_cell = row.iloc[unit_col]
+                if pd.notna(unit_cell) and str(unit_cell).strip():
+                    current_unit = normalize_unit(str(unit_cell))
 
-        product = str(product).strip()
-        if len(product) < 2 or product.upper() in ['NAN', 'NONE', '-', '--']:
-            continue
-
-        # Skip header-like rows
-        if any(kw in product.upper() for kw in ['PRODUTO', 'TOTAL', 'FONTE', 'OBS', 'NOTA']):
-            continue
-
-        # Extract prices from all price columns
-        prices = []
-        for col_idx in price_cols:
-            if col_idx < len(row):
+            prices = []
+            for col_idx in range(metric_col_idx + 1, len(row)):
                 price = parse_number(row.iloc[col_idx])
                 if price and price > 0:
                     prices.append(price)
 
-        if not prices:
-            continue
+            if prices:
+                current_prices = max(current_prices, len(prices))
+                avg_price = sum(prices) / len(prices)
+                if metric_label in ['MIN', 'MINIMO', 'MÍNIMO']:
+                    current_min = avg_price
+                elif metric_label in ['M_C', 'MC', 'MEDIA', 'MÉDIA']:
+                    current_mean = avg_price
+                elif metric_label in ['MAX', 'MÁX', 'MAXIMO', 'MÁXIMO']:
+                    current_max = avg_price
 
-        # Calculate stats
-        preco_medio = sum(prices) / len(prices)
-        preco_minimo = min(prices)
-        preco_maximo = max(prices)
+        flush_record()
+    else:
+        # Find price columns (look for patterns like regional names or "preco", "min", "max")
+        price_cols = []
+        for idx, h in enumerate(headers):
+            if pd.notna(h):
+                h_str = str(h).upper()
+                # Skip product-related columns
+                if any(kw in h_str for kw in ['PRODUTO', 'DESCRI', 'ITEM', 'UNID', 'ESPEC']):
+                    continue
+                # This might be a regional or price column
+                price_cols.append(idx)
 
-        record = {
-            'data': date.strftime('%Y-%m-%d') if date else None,
-            'ano': date.year if date else None,
-            'mes': date.month if date else None,
-            'dia': date.day if date else None,
-            'produto': product,
-            'categoria': detect_category(product),
-            'preco_medio': round(preco_medio, 2),
-            'preco_minimo': round(preco_minimo, 2),
-            'preco_maximo': round(preco_maximo, 2),
-            'num_cotacoes': len(prices),
-            'arquivo': filename,
-        }
-        records.append(record)
+        # Process data rows
+        for row_idx in range(header_row + 1, len(df)):
+            row = df.iloc[row_idx]
+
+            # Get product name
+            product = row.iloc[product_col] if product_col < len(row) else None
+            if pd.isna(product) or not str(product).strip():
+                continue
+
+            product = str(product).strip()
+            if len(product) < 2 or product.upper() in ['NAN', 'NONE', '-', '--']:
+                continue
+
+            # Skip header-like rows
+            if any(kw in product.upper() for kw in ['PRODUTO', 'TOTAL', 'FONTE', 'OBS', 'NOTA']):
+                continue
+
+            unit = None
+            if unit_col is not None and unit_col < len(row):
+                unit_cell = row.iloc[unit_col]
+                if pd.notna(unit_cell) and str(unit_cell).strip():
+                    unit = normalize_unit(str(unit_cell))
+
+            product, unit_from_text = split_product_unit(product)
+            unit = unit or unit_from_text
+
+            # Extract prices from all price columns
+            prices = []
+            for col_idx in price_cols:
+                if col_idx < len(row):
+                    price = parse_number(row.iloc[col_idx])
+                    if price and price > 0:
+                        prices.append(price)
+
+            if not prices:
+                continue
+
+            # Calculate stats
+            preco_medio = sum(prices) / len(prices)
+            preco_minimo = min(prices)
+            preco_maximo = max(prices)
+
+            record = {
+                'data': date.strftime('%Y-%m-%d') if date else None,
+                'ano': date.year if date else None,
+                'mes': date.month if date else None,
+                'dia': date.day if date else None,
+                'produto': product,
+                'unidade': unit,
+                'categoria': detect_category(product),
+                'preco_medio': round(preco_medio, 2),
+                'preco_minimo': round(preco_minimo, 2),
+                'preco_maximo': round(preco_maximo, 2),
+                'num_cotacoes': len(prices),
+                'arquivo': filename,
+            }
+            records.append(record)
 
     return records
 
@@ -281,7 +581,7 @@ def process_all_files():
     excel_patterns = ['*.xlsx', '*.xls', '*.xlsm']
     excel_files = []
     for pattern in excel_patterns:
-        excel_files.extend(DATA_EXTRACTED_DIR.glob(pattern))
+        excel_files.extend(DATA_EXTRACTED_DIR.rglob(pattern))
 
     excel_files = sorted(excel_files)
     print(f"\n[1/3] Found {len(excel_files)} Excel files to process")
