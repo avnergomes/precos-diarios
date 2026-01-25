@@ -15,6 +15,13 @@ export function formatCurrency(value, decimals = 2) {
 }
 
 /**
+ * Format a currency with unit label
+ */
+export function formatCurrencyWithUnit(value, unitLabel = 'unid.') {
+  return `${formatCurrency(value)} / ${unitLabel}`
+}
+
+/**
  * Format a number with thousand separators
  */
 export function formatNumber(value, decimals = 0) {
@@ -212,6 +219,21 @@ export const MAP_GRADIENT = [
   '#f59e0b',
   '#d97706',
 ]
+
+/**
+ * Unit labels per product (fallback to "unid.")
+ */
+export const PRODUCT_UNITS = {
+  default: 'unid.',
+}
+
+/**
+ * Get unit label for a product
+ */
+export function getUnitForProduct(produto) {
+  if (!produto) return PRODUCT_UNITS.default
+  return PRODUCT_UNITS[produto] || PRODUCT_UNITS.default
+}
 
 /**
  * Get map color based on value and range

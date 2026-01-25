@@ -36,11 +36,13 @@ export function useData() {
           }),
         ])
 
+        const normalizedFilters = normalizeFilters(filters, aggregated, detailed)
+
         setData({
           aggregated,
           detailed,
           timeseries,
-          filters,
+          filters: normalizedFilters,
         })
       } catch (err) {
         console.error('Error loading data:', err)
@@ -54,6 +56,57 @@ export function useData() {
   }, [])
 
   return { data, loading, error }
+}
+
+function normalizeFilters(filtersJson, aggregated, detailed) {
+  const anos = new Set()
+  const categorias = new Set()
+  const produtos = new Set()
+  const categoryProducts = {}
+
+  if (filtersJson?.category_products) {
+    Object.entries(filtersJson.category_products).forEach(([cat, items]) => {
+      if (!cat) return
+      categorias.add(cat)
+      categoryProducts[cat] = items
+      items.forEach((item) => produtos.add(item))
+    })
+  }
+
+  if (aggregated?.by_product) {
+    Object.entries(aggregated.by_product).forEach(([produto, stats]) => {
+      if (produto) produtos.add(produto)
+      if (stats?.categoria) {
+        categorias.add(stats.categoria)
+        if (!categoryProducts[stats.categoria]) {
+          categoryProducts[stats.categoria] = []
+        }
+        if (!categoryProducts[stats.categoria].includes(produto)) {
+          categoryProducts[stats.categoria].push(produto)
+        }
+      }
+    })
+  }
+
+  if (aggregated?.by_year) {
+    Object.keys(aggregated.by_year).forEach((year) => {
+      const numeric = parseInt(year, 10)
+      if (!Number.isNaN(numeric)) anos.add(numeric)
+    })
+  }
+
+  if (anos.size === 0 && detailed?.records?.length) {
+    detailed.records.forEach((record) => {
+      if (record?.a) anos.add(record.a)
+    })
+  }
+
+  return {
+    anos: Array.from(anos).sort((a, b) => a - b),
+    categorias: Array.from(categorias).sort((a, b) => a.localeCompare(b)),
+    produtos: Array.from(produtos).sort((a, b) => a.localeCompare(b)),
+    category_products: categoryProducts,
+  }
 }
 
 export function useFilteredData(data, filters) {
@@ -144,8 +197,11 @@ export function useAggregations(filteredData, data) {
     filteredData.forEach(r => {
       if (!r.p) return
       if (!productStats[r.p]) {
-        productStats[r.p] = { count: 0, sum: 0, categoria: r.c }
+        productStats[r.p] = { count: 0, sum: 0, categoria: r.c, unidade: r.u || null }
         productByYear[r.p] = {}
+      }
+      if (!productStats[r.p].unidade && r.u) {
+        productStats[r.p].unidade = r.u
       }
       productStats[r.p].count++
       if (r.pm) {
@@ -186,7 +242,8 @@ export function useAggregations(filteredData, data) {
         filteredData
           .filter(r => r.p === produto && r.pm > 0)
           .forEach(r => {
-            const key = `${r.a}-${String(r.m || 1).padStart(2, '0')}`
+            const month = getRecordMonth(r)
+            const key = `${r.a}-${String(month).padStart(2, '0')}`
             if (!monthlyData[key]) {
               monthlyData[key] = { sum: 0, count: 0 }
             }
@@ -202,6 +259,7 @@ export function useAggregations(filteredData, data) {
         return {
           produto,
           categoria: stats.categoria,
+          unidade: stats.unidade,
           media: stats.count > 0 ? stats.sum / stats.count : 0,
           registros: stats.count,
           variacao,
@@ -214,9 +272,16 @@ export function useAggregations(filteredData, data) {
     filteredData.forEach(r => {
       if (!r.c) return
       if (!byCategory[r.c]) {
-        byCategory[r.c] = { count: 0, sum: 0, min: Infinity, max: -Infinity }
+        byCategory[r.c] = {
+          count: 0,
+          sum: 0,
+          min: Infinity,
+          max: -Infinity,
+          products: new Set(),
+        }
       }
       byCategory[r.c].count++
+      if (r.p) byCategory[r.c].products.add(r.p)
       if (r.pm) {
         byCategory[r.c].sum += r.pm
         byCategory[r.c].min = Math.min(byCategory[r.c].min, r.pm)
@@ -231,6 +296,7 @@ export function useAggregations(filteredData, data) {
         minimo: stats.min === Infinity ? 0 : stats.min,
         maximo: stats.max === -Infinity ? 0 : stats.max,
         registros: stats.count,
+        produtos: stats.products.size,
       }
     })
 
@@ -247,4 +313,17 @@ export function useAggregations(filteredData, data) {
       sparklineData,
     }
   }, [filteredData, data])
+}
+
+function getRecordMonth(record) {
+  if (record?.m) return record.m
+  if (record?.mes) return record.mes
+  if (record?.d && typeof record.d === 'string') {
+    const parts = record.d.split('-')
+    if (parts.length >= 2) {
+      const month = parseInt(parts[1], 10)
+      if (!Number.isNaN(month)) return month
+    }
+  }
+  return 1
 }

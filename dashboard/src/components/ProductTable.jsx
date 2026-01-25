@@ -1,6 +1,12 @@
 import { useState, useMemo } from 'react'
 import { Search, ChevronUp, ChevronDown, Download, Trophy, TrendingUp, TrendingDown } from 'lucide-react'
-import { formatCurrency, formatNumber, formatCategoryName, getCategoryColor } from '../utils/format'
+import {
+  formatCurrencyWithUnit,
+  formatNumber,
+  formatCategoryName,
+  getCategoryColor,
+  getUnitForProduct,
+} from '../utils/format'
 import Sparkline from './Sparkline'
 
 export default function ProductTable({
@@ -95,13 +101,26 @@ export default function ProductTable({
 
   const exportCSV = () => {
     const headers = showCategory
-      ? ['Rank', 'Produto', 'Categoria', 'Preço médio (R$)', 'Registros']
-      : ['Rank', 'Produto', 'Preço médio (R$)', 'Registros']
+      ? ['Rank', 'Produto', 'Categoria', 'Preço médio (R$)', 'Unidade', 'Registros']
+      : ['Rank', 'Produto', 'Preço médio (R$)', 'Unidade', 'Registros']
 
     const rows = filteredData.map(item =>
       showCategory
-        ? [item.rank, item.produto, item.categoria, item.media?.toFixed(2), item.registros]
-        : [item.rank, item.produto, item.media?.toFixed(2), item.registros]
+        ? [
+          item.rank,
+          item.produto,
+          item.categoria,
+          item.media?.toFixed(2),
+          item.unidade || getUnitForProduct(item.produto),
+          item.registros,
+        ]
+        : [
+          item.rank,
+          item.produto,
+          item.media?.toFixed(2),
+          item.unidade || getUnitForProduct(item.produto),
+          item.registros,
+        ]
     )
 
     const csv = [headers, ...rows].map(row => row.join(';')).join('\n')
@@ -197,7 +216,7 @@ export default function ProductTable({
                 onClick={() => handleSort('media')}
               >
                 <span className="flex items-center justify-end gap-1">
-                  Preço médio
+                  Preço médio (R$ / unid.)
                   <SortIcon column="media" />
                 </span>
               </th>
@@ -257,7 +276,10 @@ export default function ProductTable({
                   </td>
                 )}
                 <td className="px-3 py-3 text-right font-medium">
-                  {formatCurrency(item.media)}
+                  {formatCurrencyWithUnit(
+                    item.media,
+                    item.unidade || getUnitForProduct(item.produto)
+                  )}
                 </td>
                 <td className="px-3 py-3 text-right">
                   {item.variacao !== undefined && item.variacao !== null ? (

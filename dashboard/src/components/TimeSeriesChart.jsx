@@ -36,14 +36,22 @@ export default function TimeSeriesChart({
 
   // Transform data for Recharts
   const chartData = Object.entries(data)
-    .map(([period, values]) => ({
-      period,
-      periodLabel: formatPeriod(period),
-      media: values.media || 0,
-      min: values.min || 0,
-      max: values.max || 0,
-      count: values.count || 0,
-    }))
+    .map(([period, values]) => {
+      const isNumber = typeof values === 'number'
+      const media = isNumber ? values : values.media || 0
+      const min = isNumber ? media : (values.min ?? values.media ?? 0)
+      const max = isNumber ? media : (values.max ?? values.media ?? 0)
+      const count = isNumber ? 0 : values.count || 0
+
+      return {
+        period,
+        periodLabel: formatPeriod(period),
+        media,
+        min,
+        max,
+        count,
+      }
+    })
     .sort((a, b) => a.period.localeCompare(b.period))
 
   const CustomTooltip = ({ active, payload, label }) => {

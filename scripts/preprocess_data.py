@@ -116,8 +116,9 @@ def generate_aggregated_data(df: pd.DataFrame) -> dict:
     prod_agg = df.groupby('produto').agg({
         'preco_medio': ['mean', 'min', 'max', 'count'],
         'categoria': 'first',
+        'unidade': lambda x: x.dropna().mode().iloc[0] if not x.dropna().empty else None,
     }).round(2)
-    prod_agg.columns = ['media', 'minimo', 'maximo', 'registros', 'categoria']
+    prod_agg.columns = ['media', 'minimo', 'maximo', 'registros', 'categoria', 'unidade']
     prod_agg = prod_agg.sort_values('registros', ascending=False).head(100)
 
     for prod, row in prod_agg.iterrows():
@@ -127,6 +128,7 @@ def generate_aggregated_data(df: pd.DataFrame) -> dict:
             'maximo': float(row['maximo']) if pd.notna(row['maximo']) else 0,
             'registros': int(row['registros']),
             'categoria': row['categoria'],
+            'unidade': row['unidade'] if pd.notna(row['unidade']) else None,
         }
 
     # By Year x Category
@@ -194,6 +196,7 @@ def generate_detailed_data(df: pd.DataFrame) -> dict:
             'm': int(row['mes']) if pd.notna(row['mes']) else None,
             'p': row.get('produto', ''),
             'c': row.get('categoria', ''),
+            'u': row.get('unidade', ''),
             'pm': round(float(row['preco_medio']), 2) if pd.notna(row['preco_medio']) else None,
             'pn': round(float(row['preco_minimo']), 2) if pd.notna(row['preco_minimo']) else None,
             'px': round(float(row['preco_maximo']), 2) if pd.notna(row['preco_maximo']) else None,
