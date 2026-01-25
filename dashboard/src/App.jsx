@@ -100,7 +100,7 @@ function App() {
         <Filters
           filters={filters}
           setFilters={setFilters}
-          options={data?.detailed?.filters}
+          options={data?.filters}
           metadata={metadata}
         />
 
