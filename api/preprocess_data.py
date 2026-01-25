@@ -23,10 +23,35 @@ JSON_DIR = DATA_DIR / "json"
 INPUT_FILE = DATA_PROCESSED_DIR / "consolidated.csv"
 
 
+def fix_encoding(text):
+    """Fix common encoding issues in text."""
+    if not isinstance(text, str):
+        return text
+
+    # Common mojibake fixes (Windows-1252 -> UTF-8 misinterpretation)
+    fixes = {
+        'Ã£': 'ã', 'Ã¡': 'á', 'Ã©': 'é', 'Ã­': 'í', 'Ãº': 'ú', 'Ã³': 'ó',
+        'Ã§': 'ç', 'Ãµ': 'õ', 'Ã': 'à', 'Ã¢': 'â', 'Ãª': 'ê', 'Ã´': 'ô',
+        '�': '', 'ã£': 'ã', 'ã©': 'é', 'ã­': 'í', 'ãº': 'ú',
+    }
+
+    for bad, good in fixes.items():
+        text = text.replace(bad, good)
+
+    return text
+
+
 def load_data() -> pd.DataFrame:
     """Load consolidated data."""
     logger.info("Loading data...")
-    df = pd.read_csv(INPUT_FILE, encoding='utf-8-sig')
+
+    # Try multiple encodings
+    for encoding in ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']:
+        try:
+            df = pd.read_csv(INPUT_FILE, encoding=encoding)
+            break
+        except Exception:
+            continue
 
     df['ano'] = pd.to_numeric(df['ano'], errors='coerce')
     df['mes'] = pd.to_numeric(df['mes'], errors='coerce')
@@ -34,6 +59,9 @@ def load_data() -> pd.DataFrame:
 
     df = df[df['preco_medio'].notna() & (df['preco_medio'] > 0)]
     df = df[df['ano'].notna()]
+
+    # Fix encoding in product names
+    df['produto'] = df['produto'].apply(fix_encoding)
 
     df['periodo'] = df.apply(
         lambda x: f"{int(x['ano'])}-{int(x['mes']):02d}" if pd.notna(x['mes']) else f"{int(x['ano'])}",

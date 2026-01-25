@@ -74,13 +74,59 @@ MONTHS_PT = {
 }
 
 UNIT_PATTERNS = [
-    r'sc\\s*60\\s*kg', r'sc\\s*50\\s*kg', r'sc\\s*30\\s*kg',
-    r'saca\\s*60\\s*kg', r'saca\\s*50\\s*kg',
-    r'kg\\s*renda', r'kg', r'litro', r'l\\b', r'ml',
-    r'arroba', r'@', r'tonelada', r't\\b',
-    r'caixa', r'cx', r'unidade', r'unid\\.?', r'd\\.?z', r'duzia',
+    r'sc\s*60\s*kg', r'sc\s*50\s*kg', r'sc\s*30\s*kg',
+    r'saca\s*60\s*kg', r'saca\s*50\s*kg',
+    r'kg\s*renda', r'kg', r'litro', r'l\b', r'ml',
+    r'arroba', r'@', r'tonelada', r't\b',
+    r'caixa', r'cx', r'unidade', r'unid\.?', r'd\.?z', r'duzia',
     r'cabeça', r'cabeca',
 ]
+
+# Canonical product names mapping
+PRODUCT_CANONICAL = {
+    # Soja
+    'soja industrial': 'Soja industrial tipo 1',
+    'soja industrial tipo 1': 'Soja industrial tipo 1',
+    'sojaindustrial': 'Soja industrial tipo 1',
+    'soja': 'Soja industrial tipo 1',
+    # Milho
+    'milho': 'Milho',
+    'milho tipo 1': 'Milho',
+    'milho tipo 2': 'Milho',
+    # Trigo
+    'trigo': 'Trigo',
+    'trigo tipo 1': 'Trigo',
+    # Feijão
+    'feijao preto': 'Feijão preto tipo 1',
+    'feijao preto tipo 1': 'Feijão preto tipo 1',
+    'feijao carioca': 'Feijão carioca tipo 1',
+    'feijao carioca tipo 1': 'Feijão carioca tipo 1',
+    'feijao cores': 'Feijão cores tipo 1',
+    'feijao cores tipo 1': 'Feijão cores tipo 1',
+    # Café
+    'cafe beneficiado bebida dura': 'Café beneficiado bebida dura tipo 6',
+    'cafe beneficiado bebida dura tipo 6': 'Café beneficiado bebida dura tipo 6',
+    'cafe em coco': 'Café em coco',
+    # Arroz
+    'arroz agulhinha em casca': 'Arroz agulhinha em casca tipo 1',
+    'arroz agulhinha em casca tipo 1': 'Arroz agulhinha em casca tipo 1',
+    # Suíno
+    'suino em pe': 'Suíno em pé tipo carne',
+    'suino em pe tipo carne': 'Suíno em pé tipo carne',
+    'suino em pe tipo carne nao integrado': 'Suíno em pé tipo carne não integrado',
+    'suinoempe tipocarne': 'Suíno em pé tipo carne',
+    # Boi/Vaca
+    'boi gordo': 'Boi gordo',
+    'vaca gorda': 'Vaca gorda',
+    # Erva-mate
+    'erva mate': 'Erva-mate',
+    'erva-mate': 'Erva-mate',
+    'erva mate folha em barranco': 'Erva-mate folha em barranco',
+    'erva-mate folha em barranco': 'Erva-mate folha em barranco',
+    # Mandioca
+    'mandioca industrial': 'Mandioca industrial',
+    'mandioca': 'Mandioca industrial',
+}
 
 
 def normalize_text(text: str) -> str:
@@ -90,6 +136,56 @@ def normalize_text(text: str) -> str:
     text = unicodedata.normalize('NFKD', text)
     text = ''.join(c for c in text if not unicodedata.combining(c))
     return text.upper().strip()
+
+
+def normalize_product_name(product: str) -> str:
+    """Normalize and consolidate product names."""
+    if not product:
+        return ''
+
+    # Remove trailing punctuation and extra whitespace
+    product = str(product).strip()
+    product = re.sub(r'[.,;:!?]+$', '', product)  # Remove trailing punctuation
+    product = re.sub(r'\s+', ' ', product)  # Normalize whitespace
+    product = product.strip()
+
+    # Create normalized key for lookup (lowercase, no accents)
+    key = unicodedata.normalize('NFKD', product.lower())
+    key = ''.join(c for c in key if not unicodedata.combining(c))
+    key = re.sub(r'[.,;:!?\-_]+', ' ', key)  # Replace punctuation with space
+    key = re.sub(r'\s+', ' ', key).strip()
+
+    # Check canonical mapping
+    if key in PRODUCT_CANONICAL:
+        return PRODUCT_CANONICAL[key]
+
+    # Try partial matches for common patterns
+    for pattern, canonical in PRODUCT_CANONICAL.items():
+        if pattern in key or key in pattern:
+            # Only use if significant overlap
+            if len(pattern) > 5 and (pattern.startswith(key[:5]) or key.startswith(pattern[:5])):
+                return canonical
+
+    # Apply title case and fix common issues
+    # Keep original if no canonical match, but clean it up
+    product = product.title()
+
+    # Fix common title case issues
+    product = re.sub(r'\bEm\b', 'em', product)
+    product = re.sub(r'\bDe\b', 'de', product)
+    product = re.sub(r'\bDa\b', 'da', product)
+    product = re.sub(r'\bDo\b', 'do', product)
+    product = re.sub(r'\bNao\b', 'não', product)
+    product = re.sub(r'\bTipo\b', 'tipo', product)
+    product = re.sub(r'\bPe\b', 'pé', product)
+
+    # Fix specific product names
+    product = re.sub(r'Erva-Mate', 'Erva-mate', product)
+    product = re.sub(r'Cafe\b', 'Café', product)
+    product = re.sub(r'Feijao\b', 'Feijão', product)
+    product = re.sub(r'Suino\b', 'Suíno', product)
+
+    return product.strip()
 
 
 def detect_category(product: str) -> str:
@@ -406,14 +502,19 @@ def process_sheet(df: pd.DataFrame, date: datetime, filename: str) -> List[dict]
             if preco_medio is None:
                 return
 
+            # Normalize product name
+            product_normalized = normalize_product_name(product)
+            if not product_normalized or len(product_normalized) < 3:
+                return
+
             record = {
                 'data': date.strftime('%Y-%m-%d') if date else None,
                 'ano': date.year if date else None,
                 'mes': date.month if date else None,
                 'dia': date.day if date else None,
-                'produto': product,
+                'produto': product_normalized,
                 'unidade': unit,
-                'categoria': detect_category(product),
+                'categoria': detect_category(product_normalized),
                 'preco_medio': round(float(preco_medio), 2),
                 'preco_minimo': round(float(current_min if current_min is not None else preco_medio), 2),
                 'preco_maximo': round(float(current_max if current_max is not None else preco_medio), 2),
@@ -520,14 +621,19 @@ def process_sheet(df: pd.DataFrame, date: datetime, filename: str) -> List[dict]
             preco_minimo = min(prices)
             preco_maximo = max(prices)
 
+            # Normalize product name
+            product_normalized = normalize_product_name(product)
+            if not product_normalized or len(product_normalized) < 3:
+                continue
+
             record = {
                 'data': date.strftime('%Y-%m-%d') if date else None,
                 'ano': date.year if date else None,
                 'mes': date.month if date else None,
                 'dia': date.day if date else None,
-                'produto': product,
+                'produto': product_normalized,
                 'unidade': unit,
-                'categoria': detect_category(product),
+                'categoria': detect_category(product_normalized),
                 'preco_medio': round(preco_medio, 2),
                 'preco_minimo': round(preco_minimo, 2),
                 'preco_maximo': round(preco_maximo, 2),

@@ -404,54 +404,102 @@ def load_scraped_data() -> pd.DataFrame:
 
 def normalize_products(df: pd.DataFrame) -> pd.DataFrame:
     """Normalize product names to reduce variations."""
-    # Standard product name mappings
+
+    # Standard product name mappings (order matters - more specific first)
     product_map = {
-        # Grains
+        # Grains - Arroz
         r'(?i)arroz.*(agulhinha|casca).*tipo\s*1': 'Arroz em casca tipo 1',
         r'(?i)arroz.*sequeiro': 'Arroz sequeiro',
         r'(?i)arroz.*irrigado': 'Arroz irrigado',
-        r'(?i)soja.*(industrial|tipo\s*1)': 'Soja industrial tipo 1',
-        r'(?i)^soja$': 'Soja',
-        r'(?i)milho.*(amarelo|tipo\s*1)': 'Milho amarelo tipo 1',
+        # Grains - Soja
+        r'(?i)soja\s*industrial\s*tipo\s*1': 'Soja industrial tipo 1',
+        r'(?i)soja\s*industrial': 'Soja industrial tipo 1',
+        r'(?i)sojaindustrial': 'Soja industrial tipo 1',
+        r'(?i)^soja\s*$': 'Soja industrial tipo 1',
+        # Grains - Milho
+        r'(?i)milho\s*amarelo': 'Milho amarelo tipo 1',
+        r'(?i)milho.*tipo\s*1': 'Milho amarelo tipo 1',
         r'(?i)milho.*comum': 'Milho comum',
-        r'(?i)trigo.*(pao|ph)': 'Trigo pao',
-        r'(?i)^trigo$': 'Trigo',
-        r'(?i)feij[aã]o.*preto.*tipo': 'Feijao preto tipo 1',
-        r'(?i)feij[aã]o.*preto': 'Feijao preto',
-        r'(?i)feij[aã]o.*carioca.*tipo': 'Feijao carioca tipo 1',
-        r'(?i)feij[aã]o.*carioca': 'Feijao carioca',
-        r'(?i)feij[aã]o.*(cor|de cor)': 'Feijao de cor',
-        r'(?i)caf[eé].*(beneficiado|bebida|tipo\s*6)': 'Cafe beneficiado tipo 6',
-        r'(?i)caf[eé].*(em\s*)?coco': 'Cafe em coco',
-        r'(?i)algod[aã]o': 'Algodao em caroco',
-        # Livestock
-        r'(?i)boi.*p[eé]': 'Boi em pe',
-        r'(?i)^boi$': 'Boi em pe',
-        r'(?i)vaca.*(p[eé]|corte)': 'Vaca em pe',
-        r'(?i)^vaca$': 'Vaca em pe',
-        r'(?i)^vaca\s+bebida': None,  # Invalid - remove
-        r'(?i)su[ií]no.*(p[eé]|carne)': 'Suino em pe',
+        r'(?i)^milho\s*$': 'Milho',
+        # Grains - Trigo
+        r'(?i)trigo.*(pao|ph|78)': 'Trigo pão',
+        r'(?i)^trigo\s*$': 'Trigo',
+        # Grains - Feijão
+        r'(?i)feij[aã]o\s*preto\s*tipo': 'Feijão preto tipo 1',
+        r'(?i)feij[aã]o\s*preto': 'Feijão preto tipo 1',
+        r'(?i)feij[aã]o\s*carioca\s*tipo': 'Feijão carioca tipo 1',
+        r'(?i)feij[aã]o\s*carioca': 'Feijão carioca tipo 1',
+        r'(?i)feij[aã]o.*(cor|de\s*cor)': 'Feijão de cor tipo 1',
+        # Grains - Café
+        r'(?i)caf[eé]\s*beneficiado\s*bebida\s*dura': 'Café beneficiado bebida dura tipo 6',
+        r'(?i)caf[eé]\s*beneficiado.*tipo\s*6': 'Café beneficiado bebida dura tipo 6',
+        r'(?i)caf[eé]\s*beneficiado': 'Café beneficiado bebida dura tipo 6',
+        r'(?i)caf[eé]\s*(em\s*)?coco': 'Café em coco',
+        r'(?i)algod[aã]o': 'Algodão em caroço',
+        # Livestock - Boi/Vaca
+        r'(?i)boi\s*gordo': 'Boi gordo',
+        r'(?i)boi.*(em\s*)?p[eé]': 'Boi em pé',
+        r'(?i)^boi\s*$': 'Boi em pé',
+        r'(?i)vaca\s*gorda': 'Vaca gorda',
+        r'(?i)vaca.*(em\s*)?p[eé]': 'Vaca em pé',
+        r'(?i)^vaca\s*$': 'Vaca em pé',
+        # Livestock - Suíno
+        r'(?i)su[ií]no\s*(em\s*)?p[eé]\s*tipo\s*carne\s*n[aã]o\s*integrado': 'Suíno em pé tipo carne não integrado',
+        r'(?i)su[ií]no\s*(em\s*)?p[eé]\s*tipo\s*carne': 'Suíno em pé tipo carne',
+        r'(?i)su[ií]noemp[eé]\s*tipocarne': 'Suíno em pé tipo carne',
+        r'(?i)su[ií]no\s*(em\s*)?p[eé]': 'Suíno em pé tipo carne',
+        r'(?i)^su[ií]no\s*$': 'Suíno em pé tipo carne',
         r'(?i)frango.*corte': 'Frango de corte',
         # Forestry
-        r'(?i)erva.?mate.*barranco': 'Erva-mate folha em barranco',
-        r'(?i)erva.?mate': 'Erva-mate',
+        r'(?i)erva[\s\-]?mate\s*folha\s*(em\s*)?barranco': 'Erva-mate folha em barranco',
+        r'(?i)erva[\s\-]?mate': 'Erva-mate',
         # Vegetables
+        r'(?i)mandioca\s*industrial': 'Mandioca industrial',
         r'(?i)mandioca.*amido': 'Mandioca industrial',
+        r'(?i)^mandioca\s*$': 'Mandioca industrial',
     }
 
     # Patterns to remove entirely
     invalid_patterns = [
         r'(?i)^sc\s*\d+',          # Starts with unit
         r'(?i)^em\s*barranco',     # Starts with location
-        r'(?i)embarranco',         # Concatenated location
+        r'(?i)^embarranco',        # Concatenated location
         r'(?i)^\(vivo\)',          # Fragment
         r'(?i)^vaca\s+bebida',     # Wrong combination
-        r'(?i)gr\.?longo',         # Rice variety fragment
-        r'(?i)^irrigado$',         # Just type
-        r'(?i)^sequeiro$',         # Just type
+        r'(?i)^gr\.?longo',        # Rice variety fragment
+        r'(?i)^irrigado\s*$',      # Just type
+        r'(?i)^sequeiro\s*$',      # Just type
+        r'(?i)^tipo\s*\d+\s*$',    # Just type number
+        r'(?i)^tipo\s*carne',      # Just type
+        r'(?i)^n[aã]o\s*integrado',# Just modifier
+        r'(?i)^arroba\s*$',        # Just unit
+        r'(?i)^kg\s*$',            # Just unit
+        r'(?i)vaca.*caf[eé]',      # Wrong combination
+        r'(?i)caf[eé].*vaca',      # Wrong combination
     ]
 
+    def clean_product_name(name):
+        """Clean up product name - remove trailing punctuation and normalize whitespace."""
+        if not name:
+            return None
+
+        # Convert to string and strip
+        name = str(name).strip()
+
+        # Remove trailing punctuation
+        name = re.sub(r'[.,;:!?\s]+$', '', name)
+
+        # Normalize whitespace
+        name = re.sub(r'\s+', ' ', name).strip()
+
+        return name if name else None
+
     def normalize_product(name):
+        if not name:
+            return None
+
+        # Clean the name first
+        name = clean_product_name(name)
         if not name:
             return None
 
@@ -465,11 +513,34 @@ def normalize_products(df: pd.DataFrame) -> pd.DataFrame:
             if re.search(pattern, name):
                 return replacement
 
-        return name
+        # If no mapping found, apply basic cleanup:
+        # - Title case
+        # - Fix common word casing
+        name = name.title()
 
+        # Fix common title case issues
+        name = re.sub(r'\bEm\b', 'em', name)
+        name = re.sub(r'\bDe\b', 'de', name)
+        name = re.sub(r'\bDa\b', 'da', name)
+        name = re.sub(r'\bDo\b', 'do', name)
+        name = re.sub(r'\bTipo\b', 'tipo', name)
+        name = re.sub(r'\bN[aã]o\b', 'não', name)
+
+        # Fix product-specific accents
+        name = re.sub(r'\bCafe\b', 'Café', name)
+        name = re.sub(r'\bFeijao\b', 'Feijão', name)
+        name = re.sub(r'\bSuino\b', 'Suíno', name)
+        name = re.sub(r'\bPe\b', 'pé', name)
+        name = re.sub(r'Erva-Mate', 'Erva-mate', name)
+
+        return name.strip()
+
+    # Apply normalization
     df['produto'] = df['produto'].apply(normalize_product)
+
     # Remove rows with None products
     df = df[df['produto'].notna()]
+
     return df
 
 
