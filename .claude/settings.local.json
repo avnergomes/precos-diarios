@@ -3,7 +3,11 @@
     "allow": [
       "Bash(npm run build:*)",
       "Bash(python api/etl_process.py:*)",
-      "Bash(py:*)"
+      "Bash(py:*)",
+      "Bash(python:*)",
+      "Bash(copy:*)",
+      "Bash(cmd /c:*)",
+      "Bash(powershell -Command:*)"
     ]
   }
 }

@@ -92,6 +92,86 @@ INVALID_ENTRIES = {
     '(vivo)', 'vivo', 'sc 60', 'sc 50',
 }
 
+# Canonical unit mapping for each product (from SIMA/DERAL documentation)
+PRODUCT_UNITS = {
+    # Grãos - sc 60 Kg (saca de 60 quilos)
+    'Soja industrial tipo 1': 'sc 60 Kg',
+    'Milho amarelo tipo 1': 'sc 60 Kg',
+    'Milho comum': 'sc 60 Kg',
+    'Milho': 'sc 60 Kg',
+    'Trigo pão': 'sc 60 Kg',
+    'Trigo': 'sc 60 Kg',
+    'Feijão preto tipo 1': 'sc 60 Kg',
+    'Feijão carioca tipo 1': 'sc 60 Kg',
+    'Feijão de cor tipo 1': 'sc 60 Kg',
+    'Arroz em casca tipo 1': 'sc 60 Kg',
+    'Arroz irrigado': 'sc 60 Kg',
+    'Arroz sequeiro': 'sc 60 Kg',
+    'Café beneficiado bebida dura tipo 6': 'sc 60 Kg',
+    'Algodão em caroço': 'arroba',
+    # Café em coco - kg renda (rendimento)
+    'Café em coco': 'kg renda',
+    # Pecuária - arroba ou kg
+    'Boi em pé': 'arroba',
+    'Boi gordo': 'arroba',
+    'Vaca em pé': 'arroba',
+    'Vaca gorda': 'arroba',
+    'Suíno em pé tipo carne': 'kg',
+    'Suíno em pé tipo carne não integrado': 'kg',
+    'Frango de corte': 'kg',
+    # Florestal - arroba
+    'Erva-mate': 'arroba',
+    'Erva-mate folha em barranco': 'arroba',
+    # Hortaliças - tonelada
+    'Mandioca industrial': 'tonelada',
+}
+
+
+def get_canonical_unit(product_name: str) -> Optional[str]:
+    """Get the canonical unit for a product."""
+    if not product_name:
+        return None
+
+    # Direct lookup
+    if product_name in PRODUCT_UNITS:
+        return PRODUCT_UNITS[product_name]
+
+    # Try case-insensitive lookup
+    product_lower = product_name.lower()
+    for prod, unit in PRODUCT_UNITS.items():
+        if prod.lower() == product_lower:
+            return unit
+
+    # Try partial matching for common products
+    if 'soja' in product_lower:
+        return 'sc 60 Kg'
+    if 'milho' in product_lower:
+        return 'sc 60 Kg'
+    if 'trigo' in product_lower:
+        return 'sc 60 Kg'
+    if 'feij' in product_lower:
+        return 'sc 60 Kg'
+    if 'arroz' in product_lower:
+        return 'sc 60 Kg'
+    if 'cafe' in product_lower or 'café' in product_lower:
+        if 'coco' in product_lower:
+            return 'kg renda'
+        return 'sc 60 Kg'
+    if 'boi' in product_lower or 'vaca' in product_lower:
+        return 'arroba'
+    if 'suino' in product_lower or 'suíno' in product_lower:
+        return 'kg'
+    if 'frango' in product_lower:
+        return 'kg'
+    if 'erva' in product_lower:
+        return 'arroba'
+    if 'mandioca' in product_lower:
+        return 'tonelada'
+    if 'algod' in product_lower:
+        return 'arroba'
+
+    return None
+
 
 def normalize_text(text: str) -> str:
     """Normalize text by removing accents and converting to uppercase."""
@@ -424,18 +504,17 @@ def normalize_products(df: pd.DataFrame) -> pd.DataFrame:
         # Grains - Trigo
         r'(?i)trigo.*(pao|ph|78)': 'Trigo pão',
         r'(?i)^trigo\s*$': 'Trigo',
-        # Grains - Feijão
-        r'(?i)feij[aã]o\s*preto\s*tipo': 'Feijão preto tipo 1',
-        r'(?i)feij[aã]o\s*preto': 'Feijão preto tipo 1',
-        r'(?i)feij[aã]o\s*carioca\s*tipo': 'Feijão carioca tipo 1',
-        r'(?i)feij[aã]o\s*carioca': 'Feijão carioca tipo 1',
-        r'(?i)feij[aã]o.*(cor|de\s*cor)': 'Feijão de cor tipo 1',
-        # Grains - Café
-        r'(?i)caf[eé]\s*beneficiado\s*bebida\s*dura': 'Café beneficiado bebida dura tipo 6',
-        r'(?i)caf[eé]\s*beneficiado.*tipo\s*6': 'Café beneficiado bebida dura tipo 6',
-        r'(?i)caf[eé]\s*beneficiado': 'Café beneficiado bebida dura tipo 6',
-        r'(?i)caf[eé]\s*(em\s*)?coco': 'Café em coco',
-        r'(?i)algod[aã]o': 'Algodão em caroço',
+        # Grains - Feijão (using . for ã to handle encoding issues)
+        r'(?i)feij.o\s*preto\s*tipo': 'Feijão preto tipo 1',
+        r'(?i)feij.o\s*preto': 'Feijão preto tipo 1',
+        r'(?i)feij.o\s*carioca\s*tipo': 'Feijão carioca tipo 1',
+        r'(?i)feij.o\s*carioca': 'Feijão carioca tipo 1',
+        r'(?i)feij.o.*(cor|de\s*cor)': 'Feijão de cor tipo 1',
+        # Grains - Café (using . for é, handles typo "beneficado" vs "beneficiado")
+        r'(?i)caf.\s*benefici?ado\s*bebida\s*dura': 'Café beneficiado bebida dura tipo 6',
+        r'(?i)caf.\s*benefici?ado': 'Café beneficiado bebida dura tipo 6',
+        r'(?i)caf.\s*(em\s*)?coco': 'Café em coco',
+        r'(?i)algod.o': 'Algodão em caroço',
         # Livestock - Boi/Vaca
         r'(?i)boi\s*gordo': 'Boi gordo',
         r'(?i)boi.*(em\s*)?p[eé]': 'Boi em pé',
@@ -443,12 +522,12 @@ def normalize_products(df: pd.DataFrame) -> pd.DataFrame:
         r'(?i)vaca\s*gorda': 'Vaca gorda',
         r'(?i)vaca.*(em\s*)?p[eé]': 'Vaca em pé',
         r'(?i)^vaca\s*$': 'Vaca em pé',
-        # Livestock - Suíno
-        r'(?i)su[ií]no\s*(em\s*)?p[eé]\s*tipo\s*carne\s*n[aã]o\s*integrado': 'Suíno em pé tipo carne não integrado',
-        r'(?i)su[ií]no\s*(em\s*)?p[eé]\s*tipo\s*carne': 'Suíno em pé tipo carne',
-        r'(?i)su[ií]noemp[eé]\s*tipocarne': 'Suíno em pé tipo carne',
-        r'(?i)su[ií]no\s*(em\s*)?p[eé]': 'Suíno em pé tipo carne',
-        r'(?i)^su[ií]no\s*$': 'Suíno em pé tipo carne',
+        # Livestock - Suíno (using . for í/é/ã to handle encoding issues)
+        r'(?i)su.no\s*(em\s*)?p.\s*tipo\s*carne\s*n.o\s*integrado': 'Suíno em pé tipo carne não integrado',
+        r'(?i)su.no\s*(em\s*)?p.\s*tipo\s*carne': 'Suíno em pé tipo carne',
+        r'(?i)su.noemp.\s*tipocarne': 'Suíno em pé tipo carne',
+        r'(?i)su.no\s*(em\s*)?p.': 'Suíno em pé tipo carne',
+        r'(?i)^su.no\s*$': 'Suíno em pé tipo carne',
         r'(?i)frango.*corte': 'Frango de corte',
         # Forestry
         r'(?i)erva[\s\-]?mate\s*folha\s*(em\s*)?barranco': 'Erva-mate folha em barranco',
@@ -540,6 +619,9 @@ def normalize_products(df: pd.DataFrame) -> pd.DataFrame:
 
     # Remove rows with None products
     df = df[df['produto'].notna()]
+
+    # Set canonical units for each product
+    df['unidade'] = df['produto'].apply(get_canonical_unit)
 
     return df
 
