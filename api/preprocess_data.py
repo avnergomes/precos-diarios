@@ -63,6 +63,12 @@ def load_data() -> pd.DataFrame:
     # Fix encoding in product names
     df['produto'] = df['produto'].apply(fix_encoding)
 
+    # Fix category inconsistencies - use most common category for each product
+    product_main_category = df.groupby('produto')['categoria'].agg(
+        lambda x: x.value_counts().index[0]
+    )
+    df['categoria'] = df['produto'].map(product_main_category)
+
     df['periodo'] = df.apply(
         lambda x: f"{int(x['ano'])}-{int(x['mes']):02d}" if pd.notna(x['mes']) else f"{int(x['ano'])}",
         axis=1
