@@ -1,12 +1,13 @@
-import { TrendingUp, TrendingDown, Target, Activity } from 'lucide-react'
+import { TrendingUp, TrendingDown, Target, Activity, GitBranch } from 'lucide-react'
 import { formatCurrency } from '../utils/format'
 
 /**
- * ForecastKpis - Display comparison metrics for ARIMA and Prophet models
+ * ForecastKpis - Display comparison metrics for ARIMA, Prophet and Linear models
  */
 export default function ForecastKpis({ modelos = {}, historico = [], horizon = 30 }) {
   const arima = modelos.arima
   const prophet = modelos.prophet
+  const linear = modelos.linear
 
   // Get current price (last historical value)
   const currentPrice = historico.length > 0 ? historico[historico.length - 1].valor : 0
@@ -14,10 +15,12 @@ export default function ForecastKpis({ modelos = {}, historico = [], horizon = 3
   // Get first forecast value for each model
   const arimaForecast = arima?.previsoes?.[0]?.previsto || 0
   const prophetForecast = prophet?.previsoes?.[0]?.previsto || 0
+  const linearForecast = linear?.previsoes?.[0]?.previsto || 0
 
   // Calculate variations
   const arimaVariation = currentPrice > 0 ? ((arimaForecast - currentPrice) / currentPrice) * 100 : 0
   const prophetVariation = currentPrice > 0 ? ((prophetForecast - currentPrice) / currentPrice) * 100 : 0
+  const linearVariation = currentPrice > 0 ? ((linearForecast - currentPrice) / currentPrice) * 100 : 0
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -117,8 +120,57 @@ export default function ForecastKpis({ modelos = {}, historico = [], horizon = 3
         </div>
       )}
 
+      {/* Linear Regression Model Card (fallback) */}
+      {linear && (
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <GitBranch className="w-5 h-5 text-purple-600" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-dark-800">Regressão Linear</h4>
+                <p className="text-xs text-dark-400">
+                  R²: {linear.r_squared?.toFixed(4) || 'N/A'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {/* Forecast Price */}
+            <div>
+              <p className="text-xs text-dark-500 mb-1">Previsão {horizon}d</p>
+              <p className="text-xl font-bold text-purple-600">
+                {formatCurrency(linearForecast)}
+              </p>
+              <p className={`text-sm flex items-center gap-1 ${linearVariation >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {linearVariation >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                {linearVariation >= 0 ? '+' : ''}{linearVariation.toFixed(1)}%
+              </p>
+            </div>
+
+            {/* Metrics */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-dark-500">MAE:</span>
+                <span className="font-medium">{linear.metricas?.mae?.toFixed(2) || '-'}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-dark-500">RMSE:</span>
+                <span className="font-medium">{linear.metricas?.rmse?.toFixed(2) || '-'}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-dark-500">MAPE:</span>
+                <span className="font-medium">{linear.metricas?.mape?.toFixed(1) || '-'}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* No models available */}
-      {!arima && !prophet && (
+      {!arima && !prophet && !linear && (
         <div className="col-span-2 card p-6 text-center text-dark-400">
           Nenhum modelo de previsão disponível
         </div>

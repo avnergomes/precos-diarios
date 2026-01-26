@@ -10,6 +10,12 @@ export default function ForecastTable({
 }) {
   const arima = modelos.arima?.previsoes || []
   const prophet = modelos.prophet?.previsoes || []
+  const linear = modelos.linear?.previsoes || []
+
+  // Determine which models are available
+  const hasArima = arima.length > 0
+  const hasProphet = prophet.length > 0
+  const hasLinear = linear.length > 0
 
   // Merge forecasts by date
   const forecastMap = {}
@@ -30,20 +36,32 @@ export default function ForecastTable({
     forecastMap[item.data].prophet_ic = `${formatCurrency(item.ic_inferior)} - ${formatCurrency(item.ic_superior)}`
   })
 
+  linear.forEach(item => {
+    if (!forecastMap[item.data]) {
+      forecastMap[item.data] = { data: item.data }
+    }
+    forecastMap[item.data].linear = item.previsto
+    forecastMap[item.data].linear_ic = `${formatCurrency(item.ic_inferior)} - ${formatCurrency(item.ic_superior)}`
+  })
+
   const forecasts = Object.values(forecastMap).sort(
     (a, b) => new Date(a.data) - new Date(b.data)
   )
 
   // Export to CSV
   const exportCSV = () => {
-    const headers = ['Data', 'ARIMA', 'IC 95% ARIMA', 'Prophet', 'IC 95% Prophet']
-    const rows = forecasts.map(f => [
-      f.data,
-      f.arima?.toFixed(2) || '',
-      f.arima_ic || '',
-      f.prophet?.toFixed(2) || '',
-      f.prophet_ic || '',
-    ])
+    const headers = ['Data']
+    if (hasArima) headers.push('ARIMA', 'IC 95% ARIMA')
+    if (hasProphet) headers.push('Prophet', 'IC 95% Prophet')
+    if (hasLinear) headers.push('Linear', 'IC 95% Linear')
+
+    const rows = forecasts.map(f => {
+      const row = [f.data]
+      if (hasArima) row.push(f.arima?.toFixed(2) || '', f.arima_ic || '')
+      if (hasProphet) row.push(f.prophet?.toFixed(2) || '', f.prophet_ic || '')
+      if (hasLinear) row.push(f.linear?.toFixed(2) || '', f.linear_ic || '')
+      return row
+    })
 
     const csv = [headers, ...rows].map(row => row.join(';')).join('\n')
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
@@ -76,12 +94,13 @@ export default function ForecastTable({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[600px]">
+        <table className="w-full min-w-[500px]">
           <thead>
             <tr className="table-header">
               <th className="px-4 py-3 text-left">Data</th>
-              <th className="px-4 py-3 text-right text-blue-600">ARIMA</th>
-              <th className="px-4 py-3 text-right text-green-600">Prophet</th>
+              {hasArima && <th className="px-4 py-3 text-right text-blue-600">ARIMA</th>}
+              {hasProphet && <th className="px-4 py-3 text-right text-green-600">Prophet</th>}
+              {hasLinear && <th className="px-4 py-3 text-right text-purple-600">Linear</th>}
               <th className="px-4 py-3 text-right text-dark-500">IC 95%</th>
             </tr>
           </thead>
@@ -91,14 +110,23 @@ export default function ForecastTable({
                 <td className="px-4 py-3 font-medium">
                   {formatDate(forecast.data)}
                 </td>
-                <td className="px-4 py-3 text-right text-blue-600 font-medium">
-                  {forecast.arima ? formatCurrency(forecast.arima) : '-'}
-                </td>
-                <td className="px-4 py-3 text-right text-green-600 font-medium">
-                  {forecast.prophet ? formatCurrency(forecast.prophet) : '-'}
-                </td>
+                {hasArima && (
+                  <td className="px-4 py-3 text-right text-blue-600 font-medium">
+                    {forecast.arima ? formatCurrency(forecast.arima) : '-'}
+                  </td>
+                )}
+                {hasProphet && (
+                  <td className="px-4 py-3 text-right text-green-600 font-medium">
+                    {forecast.prophet ? formatCurrency(forecast.prophet) : '-'}
+                  </td>
+                )}
+                {hasLinear && (
+                  <td className="px-4 py-3 text-right text-purple-600 font-medium">
+                    {forecast.linear ? formatCurrency(forecast.linear) : '-'}
+                  </td>
+                )}
                 <td className="px-4 py-3 text-right text-dark-400 text-sm">
-                  {forecast.arima_ic || forecast.prophet_ic || '-'}
+                  {forecast.arima_ic || forecast.prophet_ic || forecast.linear_ic || '-'}
                 </td>
               </tr>
             ))}
