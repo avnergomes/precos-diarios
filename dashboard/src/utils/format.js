@@ -135,8 +135,11 @@ export function calculateVariation(current, previous) {
 export const CATEGORY_COLORS = {
   'Graos': '#22c55e',
   'Grãos': '#22c55e',
+  'Cafe': '#a16207',
+  'Café': '#a16207',
   'Hortalicas': '#f59e0b',
   'Hortaliças': '#f59e0b',
+  'Mandioca': '#d97706',
   'Frutas': '#ec4899',
   'Pecuaria': '#8b5cf6',
   'Pecuária': '#8b5cf6',
@@ -155,6 +158,7 @@ export function formatCategoryName(category) {
     Graos: 'Grãos',
     Pecuaria: 'Pecuária',
     Hortalicas: 'Hortaliças',
+    Cafe: 'Café',
   }
 
   return labels[category] || category

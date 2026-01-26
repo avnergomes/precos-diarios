@@ -41,9 +41,9 @@ HEADERS = {
 # Category mappings
 CATEGORIAS = {
     'SOJA': 'Graos', 'MILHO': 'Graos', 'TRIGO': 'Graos', 'FEIJAO': 'Graos',
-    'ARROZ': 'Graos', 'CAFE': 'Graos',
+    'ARROZ': 'Graos', 'CAFE': 'Cafe',
     'BOI': 'Pecuaria', 'VACA': 'Pecuaria', 'SUINO': 'Pecuaria', 'FRANGO': 'Pecuaria',
-    'MANDIOCA': 'Hortalicas',
+    'MANDIOCA': 'Mandioca',
     'ERVA-MATE': 'Florestal', 'ERVA MATE': 'Florestal',
 }
 
