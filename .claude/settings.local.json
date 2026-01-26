@@ -8,7 +8,9 @@
       "Bash(copy:*)",
       "Bash(cmd /c:*)",
       "Bash(powershell -Command:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(where:*)",
+      "Bash(python3:*)"
     ]
   }
 }
