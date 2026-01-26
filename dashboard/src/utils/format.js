@@ -221,9 +221,37 @@ export const MAP_GRADIENT = [
 ]
 
 /**
- * Unit labels per product (fallback to "unid.")
+ * Unit labels per product (fallback mapping)
  */
 export const PRODUCT_UNITS = {
+  // Grãos - sc 60 Kg
+  'Soja industrial tipo 1': 'sc 60 Kg',
+  'Milho amarelo tipo 1': 'sc 60 Kg',
+  'Milho comum': 'sc 60 Kg',
+  'Trigo pão': 'sc 60 Kg',
+  'Trigo': 'sc 60 Kg',
+  'Feijão preto tipo 1': 'sc 60 Kg',
+  'Feijão carioca tipo 1': 'sc 60 Kg',
+  'Feijão de cor tipo 1': 'sc 60 Kg',
+  'Arroz em casca tipo 1': 'sc 60 Kg',
+  'Arroz irrigado': 'sc 60 Kg',
+  'Arroz sequeiro': 'sc 60 Kg',
+  'Café beneficiado bebida dura tipo 6': 'sc 60 Kg',
+  // Café em coco - kg renda
+  'Café em coco': 'kg renda',
+  // Pecuária - arroba ou kg
+  'Boi em pé': 'arroba',
+  'Vaca em pé': 'arroba',
+  'Algodão em caroço': 'arroba',
+  'Suíno em pé tipo carne': 'kg',
+  'Suíno em pé tipo carne não integrado': 'kg',
+  'Frango de corte': 'kg',
+  // Florestal - arroba
+  'Erva-mate': 'arroba',
+  'Erva-mate folha em barranco': 'arroba',
+  // Hortaliças - tonelada
+  'Mandioca industrial': 'tonelada',
+  // Default
   default: 'unid.',
 }
 
@@ -232,7 +260,21 @@ export const PRODUCT_UNITS = {
  */
 export function getUnitForProduct(produto) {
   if (!produto) return PRODUCT_UNITS.default
-  return PRODUCT_UNITS[produto] || PRODUCT_UNITS.default
+
+  // Direct lookup
+  if (PRODUCT_UNITS[produto]) {
+    return PRODUCT_UNITS[produto]
+  }
+
+  // Try case-insensitive partial match
+  const prodLower = produto.toLowerCase()
+  for (const [key, unit] of Object.entries(PRODUCT_UNITS)) {
+    if (key !== 'default' && key.toLowerCase() === prodLower) {
+      return unit
+    }
+  }
+
+  return PRODUCT_UNITS.default
 }
 
 /**
