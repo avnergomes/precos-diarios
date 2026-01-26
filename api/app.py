@@ -209,7 +209,7 @@ def get_forecast(produto):
         horizonte = max(7, min(365, horizonte))
 
         # Import forecasting module
-        from forecast import generate_forecast, get_available_products
+        from api.forecast import generate_forecast, get_available_products
 
         # Check if product exists
         available = get_available_products()
@@ -241,7 +241,7 @@ def get_forecast(produto):
 def get_forecast_products():
     """Get list of products available for forecasting."""
     try:
-        from forecast import get_available_products
+        from api.forecast import get_available_products
         products = get_available_products()
         return jsonify({
             'success': True,
