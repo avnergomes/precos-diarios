@@ -327,3 +327,39 @@ function getRecordMonth(record) {
   }
   return 1
 }
+
+// Generate time series from filtered data
+export function useFilteredTimeSeries(filteredData) {
+  return useMemo(() => {
+    if (!filteredData || filteredData.length === 0) return {}
+
+    const byPeriod = {}
+
+    filteredData.forEach(r => {
+      if (!r.a || !r.pm) return
+      const month = getRecordMonth(r)
+      const period = `${r.a}-${String(month).padStart(2, '0')}`
+
+      if (!byPeriod[period]) {
+        byPeriod[period] = { sum: 0, count: 0, min: Infinity, max: -Infinity }
+      }
+
+      byPeriod[period].sum += r.pm
+      byPeriod[period].count++
+      byPeriod[period].min = Math.min(byPeriod[period].min, r.pm)
+      byPeriod[period].max = Math.max(byPeriod[period].max, r.pm)
+    })
+
+    const result = {}
+    Object.entries(byPeriod).forEach(([period, stats]) => {
+      result[period] = {
+        media: stats.count > 0 ? stats.sum / stats.count : 0,
+        min: stats.min === Infinity ? 0 : stats.min,
+        max: stats.max === -Infinity ? 0 : stats.max,
+        count: stats.count,
+      }
+    })
+
+    return result
+  }, [filteredData])
+}
