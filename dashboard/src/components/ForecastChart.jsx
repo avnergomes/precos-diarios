@@ -83,6 +83,26 @@ export default function ForecastChart({
     }
   })
 
+  // Add Linear regression forecast (fallback)
+  const linearData = modelos.linear?.previsoes || []
+  linearData.forEach(item => {
+    const existing = chartData.find(d => d.data === item.data)
+    if (existing) {
+      existing.linear = item.previsto
+      existing.linear_lower = item.ic_inferior
+      existing.linear_upper = item.ic_superior
+    } else {
+      chartData.push({
+        data: item.data,
+        label: formatDateLabel(item.data),
+        linear: item.previsto,
+        linear_lower: item.ic_inferior,
+        linear_upper: item.ic_superior,
+        tipo: 'previsao',
+      })
+    }
+  })
+
   // Sort by date
   chartData.sort((a, b) => new Date(a.data) - new Date(b.data))
 
@@ -116,6 +136,15 @@ export default function ForecastChart({
             Prophet: <span className="font-medium">{formatCurrency(dataPoint.prophet)}</span>
             <span className="text-xs text-dark-400 ml-1">
               ({formatCurrency(dataPoint.prophet_lower)} - {formatCurrency(dataPoint.prophet_upper)})
+            </span>
+          </p>
+        )}
+
+        {dataPoint?.linear && (
+          <p className="text-sm text-purple-600">
+            Linear: <span className="font-medium">{formatCurrency(dataPoint.linear)}</span>
+            <span className="text-xs text-dark-400 ml-1">
+              ({formatCurrency(dataPoint.linear_lower)} - {formatCurrency(dataPoint.linear_upper)})
             </span>
           </p>
         )}
@@ -157,6 +186,11 @@ export default function ForecastChart({
               <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
               <stop offset="95%" stopColor="#22c55e" stopOpacity={0.05} />
             </linearGradient>
+            {/* Linear regression confidence interval gradient */}
+            <linearGradient id="linearGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.05} />
+            </linearGradient>
           </defs>
 
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -193,6 +227,7 @@ export default function ForecastChart({
                 historico: 'Histórico',
                 arima: 'ARIMA',
                 prophet: 'Prophet',
+                linear: 'Regressão Linear',
               }
               return labels[value] || value
             }}
@@ -263,6 +298,31 @@ export default function ForecastChart({
               stroke="#22c55e"
               strokeWidth={2}
               strokeDasharray="3 3"
+              dot={false}
+              connectNulls
+            />
+          )}
+
+          {/* Linear regression confidence interval */}
+          {modelos.linear && (
+            <Area
+              type="monotone"
+              dataKey="linear_upper"
+              stackId="linear"
+              stroke="none"
+              fill="url(#linearGradient)"
+              connectNulls
+            />
+          )}
+
+          {/* Linear regression forecast line */}
+          {modelos.linear && (
+            <Line
+              type="monotone"
+              dataKey="linear"
+              stroke="#8b5cf6"
+              strokeWidth={2}
+              strokeDasharray="8 4"
               dot={false}
               connectNulls
             />
