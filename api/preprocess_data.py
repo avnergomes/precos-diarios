@@ -144,8 +144,16 @@ def generate_detailed_data(df: pd.DataFrame) -> dict:
             'a': int(row['ano']) if pd.notna(row['ano']) else None,
             'p': row.get('produto', ''),
             'c': row.get('categoria', ''),
+            'u': row.get('unidade', ''),
             'pm': round(float(row['preco_medio']), 2),
         })
+
+    # Build product-unit mapping for reference
+    product_units = {}
+    for prod in df['produto'].unique():
+        unit = df[df['produto'] == prod]['unidade'].mode()
+        if len(unit) > 0:
+            product_units[prod] = unit.iloc[0]
 
     return {
         'records': records,
@@ -154,6 +162,7 @@ def generate_detailed_data(df: pd.DataFrame) -> dict:
             'categorias': sorted(df['categoria'].dropna().unique().tolist()),
             'produtos': sorted(df['produto'].dropna().unique().tolist())[:500],
         },
+        'product_units': product_units,
     }
 
 
