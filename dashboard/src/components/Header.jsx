@@ -35,65 +35,65 @@ export default function Header({ metadata, productCount }) {
       </div>
 
       {/* Content */}
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-8">
           {/* Title and description */}
-          <div className="space-y-4">
+          <div className="space-y-4 max-w-2xl">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
                 <Wheat className="w-8 h-8 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-white font-display">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white font-display leading-tight text-balance">
                   Cotações Diárias SIMA
                 </h1>
-                <p className="text-primary-100 text-sm md:text-base">
+                <p className="text-primary-100 text-sm sm:text-base leading-snug">
                   Sistema de Informação de Mercado Agrícola
                 </p>
               </div>
             </div>
 
-            <p className="text-primary-100 max-w-xl text-sm md:text-base">
+            <p className="text-primary-100/95 text-sm sm:text-base leading-relaxed text-balance">
               Acompanhe os preços diários de produtos agrícolas no estado do Paraná.
               Dados coletados pela Secretaria de Estado da Agricultura e do Abastecimento (SEAB).
             </p>
-            <p className="text-primary-100 text-xs md:text-sm">
+            <p className="text-primary-100/90 text-xs sm:text-sm leading-relaxed text-balance">
               Valores em R$ por unidade de comercialização informada pelo SIMA.
               A unidade varia conforme o produto.
             </p>
           </div>
 
           {/* Quick stats */}
-          <div className="flex flex-wrap gap-4">
-            <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg backdrop-blur-sm">
+          <div className="flex flex-wrap gap-3 sm:gap-4 w-full md:w-auto">
+            <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg backdrop-blur-sm w-full sm:w-auto">
               <Calendar className="w-5 h-5 text-primary-200" />
               <div>
                 <p className="text-xs text-primary-200">Período dos dados</p>
-                <p className="text-white font-semibold">{yearRange}</p>
+                <p className="text-white font-semibold text-sm sm:text-base">{yearRange}</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg backdrop-blur-sm">
+            <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg backdrop-blur-sm w-full sm:w-auto">
               <Package className="w-5 h-5 text-primary-200" />
               <div>
                 <p className="text-xs text-primary-200">Produtos</p>
-                <p className="text-white font-semibold">{uniqueProducts}</p>
+                <p className="text-white font-semibold text-sm sm:text-base">{uniqueProducts}</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg backdrop-blur-sm">
+            <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg backdrop-blur-sm w-full sm:w-auto">
               <MapPin className="w-5 h-5 text-primary-200" />
               <div>
                 <p className="text-xs text-primary-200">Registros</p>
-                <p className="text-white font-semibold">{totalRecords}</p>
+                <p className="text-white font-semibold text-sm sm:text-base">{totalRecords}</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg backdrop-blur-sm">
+            <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg backdrop-blur-sm w-full sm:w-auto">
               <Clock className="w-5 h-5 text-primary-200" />
               <div>
                 <p className="text-xs text-primary-200">Última atualização</p>
-                <p className="text-white font-semibold">{lastUpdate}</p>
+                <p className="text-white font-semibold text-sm sm:text-base">{lastUpdate}</p>
               </div>
             </div>
           </div>
