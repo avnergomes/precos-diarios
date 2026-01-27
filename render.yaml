@@ -8,6 +8,7 @@ services:
     repo: https://github.com/avfranco/precos-diarios
     buildCommand: |
       pip install -r requirements.txt
+      python -c "from api.scraper import scrape_latest_quotations; scrape_latest_quotations()" || true
       python api/etl_process.py || true
       python api/preprocess_data.py || true
     startCommand: gunicorn api.app:app --bind 0.0.0.0:$PORT
