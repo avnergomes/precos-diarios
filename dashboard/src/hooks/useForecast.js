@@ -6,7 +6,7 @@ const API_URL = import.meta.env.VITE_API_URL || ''
 /**
  * Hook to fetch forecast data for a product
  */
-export function useForecast(produto, horizonte = 30) {
+export function useForecast(produto, horizonte = 30, auto = true) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -45,8 +45,19 @@ export function useForecast(produto, horizonte = 30) {
   }, [produto, horizonte])
 
   useEffect(() => {
+    if (!auto) {
+      if (!produto) {
+        setData(null)
+        setError(null)
+      } else {
+        setData(null)
+        setError(null)
+      }
+      return
+    }
+
     fetchForecast()
-  }, [fetchForecast])
+  }, [auto, fetchForecast, produto, horizonte])
 
   return { data, loading, error, refetch: fetchForecast }
 }

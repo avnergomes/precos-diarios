@@ -30,9 +30,10 @@ function App() {
   const [forecastProduct, setForecastProduct] = useState(null)
   const [forecastHorizon, setForecastHorizon] = useState(90)
   const { products: forecastProducts } = useForecastProducts()
-  const { data: forecastData, loading: forecastLoading, error: forecastError } = useForecast(
+  const { data: forecastData, loading: forecastLoading, error: forecastError, refetch: refetchForecast } = useForecast(
     forecastProduct,
-    forecastHorizon
+    forecastHorizon,
+    false
   )
 
   const filteredData = useFilteredData(data, filters)
@@ -279,6 +280,16 @@ function App() {
                   <option value={365}>1 ano</option>
                 </select>
               </div>
+              <div className="w-full sm:w-48 flex items-end">
+                <button
+                  type="button"
+                  className="btn-primary w-full"
+                  onClick={refetchForecast}
+                  disabled={!forecastProduct || forecastLoading}
+                >
+                  {forecastLoading ? 'Gerando...' : 'Gerar previsÃµes'}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -323,7 +334,13 @@ function App() {
                 title="Previsões detalhadas"
               />
             </>
-          ) : null}
+          ) : (
+            <div className="card p-8 text-center">
+              <p className="text-dark-500">
+                Selecione um produto e clique em "Gerar previsÃµes" para iniciar.
+              </p>
+            </div>
+          )}
         </section>
 
         {/* Note about units */}

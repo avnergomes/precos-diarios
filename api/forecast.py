@@ -125,7 +125,8 @@ class PriceForecaster:
             if not self.has_sufficient_data():
                 return {'success': False, 'error': f'Dados insuficientes (mínimo {MIN_MONTHS_REQUIRED} meses)'}
 
-            series = self.monthly_data['y'].values
+            # Keep pandas index so statsmodels returns Series/DataFrame outputs
+            series = self.monthly_data.set_index('ds')['y']
 
             # Test for stationarity
             try:
@@ -250,8 +251,8 @@ class PriceForecaster:
 
             # Forecast
             forecast = self.arima_model.get_forecast(steps=months)
-            pred_mean = forecast.predicted_mean
-            conf_int = forecast.conf_int(alpha=0.05)
+            pred_mean = np.asarray(forecast.predicted_mean)
+            conf_int = np.asarray(forecast.conf_int(alpha=0.05))
 
             # Generate dates
             last_date = self.monthly_data['ds'].iloc[-1]
@@ -265,9 +266,9 @@ class PriceForecaster:
             for i, date in enumerate(dates):
                 predictions.append({
                     'data': date.strftime('%Y-%m-%d'),
-                    'previsto': round(float(pred_mean.iloc[i]), 2),
-                    'ic_inferior': round(float(conf_int.iloc[i, 0]), 2),
-                    'ic_superior': round(float(conf_int.iloc[i, 1]), 2),
+                    'previsto': round(float(pred_mean[i]), 2),
+                    'ic_inferior': round(float(conf_int[i, 0]), 2),
+                    'ic_superior': round(float(conf_int[i, 1]), 2),
                 })
 
             # Calculate metrics
