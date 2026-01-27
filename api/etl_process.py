@@ -640,6 +640,12 @@ def process_all_files():
         for pattern in excel_patterns:
             excel_files.extend(DATA_EXTRACTED_DIR.glob(pattern))
 
+    # Also include daily files downloaded by the scraper
+    daily_dir = DATA_EXTRACTED_DIR / "daily"
+    if daily_dir.exists():
+        for pattern in excel_patterns:
+            excel_files.extend(daily_dir.glob(pattern))
+
     excel_files = sorted(excel_files)
     logger.info(f"Found {len(excel_files)} Excel files to process")
 

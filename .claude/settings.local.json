@@ -10,7 +10,8 @@
       "Bash(powershell -Command:*)",
       "Bash(timeout:*)",
       "Bash(where:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(dir \"C:\\\\Users\\\\avner\\\\OneDrive\\\\Documentos\\\\GitHub\\\\precos-diarios\\\\data\\\\extracted\\\\daily\"\" /b)"
     ]
   }
 }

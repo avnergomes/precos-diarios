@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Backfill script for SIMA Daily Quotations (2025+).
-Discovers all SIMA pages from ID 2520 onward and scrapes price data.
+Discovers all SIMA pages from ID 2520 onward and downloads Excel files.
 
 Usage:
     python scripts/backfill_2025.py
@@ -21,16 +21,14 @@ from datetime import datetime
 ROOT_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-import pandas as pd
 from api.scraper import (
-    scrape_cotacao, update_links_file, COTACAO_URL,
-    SCRAPED_DIR, LINKS_FILE,
+    scrape_cotacao, update_links_file, COTACAO_URL, LINKS_FILE,
+    load_scraper_state, save_scraper_state,
 )
 
 BACKFILL_STATE = ROOT_DIR / "data" / "backfill_state.json"
-DEFAULT_START_ID = 2520
+DEFAULT_START_ID = 2286
 DEFAULT_END_ID = 3200
-BATCH_SIZE = 50
 
 
 def load_known_ids() -> set:
@@ -46,7 +44,7 @@ def load_known_ids() -> set:
 
 
 def load_backfill_state() -> dict:
-    """Load backfill state (which IDs were already tried and empty)."""
+    """Load backfill state (which IDs were already tried)."""
     if BACKFILL_STATE.exists():
         try:
             return json.loads(BACKFILL_STATE.read_text())
@@ -60,27 +58,6 @@ def save_backfill_state(state: dict):
     BACKFILL_STATE.parent.mkdir(parents=True, exist_ok=True)
     state["last_run"] = datetime.now().isoformat()
     BACKFILL_STATE.write_text(json.dumps(state, indent=2))
-
-
-def save_records(records: list):
-    """Merge records into scraped_quotations.csv."""
-    if not records:
-        return
-
-    SCRAPED_DIR.mkdir(parents=True, exist_ok=True)
-    scraped_csv = SCRAPED_DIR / "scraped_quotations.csv"
-    new_df = pd.DataFrame(records)
-
-    if scraped_csv.exists():
-        existing = pd.read_csv(scraped_csv, encoding='utf-8-sig')
-        combined = pd.concat([existing, new_df], ignore_index=True)
-        combined = combined.drop_duplicates(subset=['data', 'produto', 'preco_medio'])
-    else:
-        combined = new_df
-
-    combined = combined.sort_values(['ano', 'mes', 'dia', 'produto'], na_position='last')
-    combined.to_csv(scraped_csv, index=False, encoding='utf-8-sig')
-    print(f"  Saved {len(combined)} total records to {scraped_csv}")
 
 
 def main():
@@ -100,54 +77,70 @@ def main():
     tried_empty = set(state.get("empty_ids", []))
     found_ids = list(state.get("found_ids", []))
 
-    batch_records = []
-    batch_links = []
+    new_links = []
     new_found = 0
+    highest_found = args.start_id
+    total_files = 0
 
     for cid in range(args.start_id, args.end_id + 1):
         if cid in known_ids or cid in tried_empty:
             continue
 
-        date, records = scrape_cotacao(cid)
+        date, files_downloaded = scrape_cotacao(cid)
 
-        if records:
-            batch_records.extend(records)
-            batch_links.append(f"{COTACAO_URL}{cid}")
+        if files_downloaded > 0:
+            new_links.append(f"{COTACAO_URL}{cid}")
             found_ids.append(cid)
+            highest_found = max(highest_found, cid)
             new_found += 1
-            print(f"[FOUND] ID {cid}: {len(records)} records, date={date}")
+            total_files += files_downloaded
+            print(f"[FOUND] ID {cid}: {files_downloaded} files, date={date}")
+        elif date is not None:
+            # Page exists but no downloadable files
+            new_links.append(f"{COTACAO_URL}{cid}")
+            found_ids.append(cid)
+            highest_found = max(highest_found, cid)
+            new_found += 1
+            print(f"[PAGE]  ID {cid}: no files, date={date}")
         else:
             tried_empty.add(cid)
 
         time.sleep(1)
 
-        # Save incrementally every BATCH_SIZE found pages
-        if new_found > 0 and new_found % BATCH_SIZE == 0:
-            print(f"\n  Saving batch ({new_found} found so far)...")
-            save_records(batch_records)
-            if batch_links:
-                update_links_file(batch_links)
+        # Save incrementally every 50 found pages
+        if new_found > 0 and new_found % 50 == 0:
+            print(f"\n  Saving progress ({new_found} pages found, {total_files} files)...")
+            if new_links:
+                update_links_file(new_links)
+                new_links = []
             state["empty_ids"] = sorted(tried_empty)
             state["found_ids"] = sorted(set(found_ids))
             save_backfill_state(state)
-            batch_records = []
-            batch_links = []
 
     # Final save
-    if batch_records or batch_links:
-        print(f"\n  Final save...")
-        save_records(batch_records)
-        if batch_links:
-            update_links_file(batch_links)
+    if new_links:
+        update_links_file(new_links)
 
     state["empty_ids"] = sorted(tried_empty)
     state["found_ids"] = sorted(set(found_ids))
     save_backfill_state(state)
 
+    # Update scraper state with highest found
+    scraper_state = load_scraper_state()
+    if highest_found > scraper_state.get("last_found_id", 0):
+        scraper_state["last_found_id"] = highest_found
+        save_scraper_state(scraper_state)
+
     print("\n" + "=" * 60)
-    print(f"Backfill complete. Found {new_found} new pages.")
-    print(f"Total known pages: {len(found_ids)}")
+    print(f"Backfill complete.")
+    print(f"  New pages found: {new_found}")
+    print(f"  Excel files downloaded: {total_files}")
+    print(f"  Highest ID: {highest_found}")
+    print(f"  Total known pages: {len(set(found_ids))}")
     print("=" * 60)
+    print("\nNext step: run ETL to process downloaded files:")
+    print("  py api/etl_process.py")
+    print("  py api/preprocess_data.py")
 
 
 if __name__ == "__main__":
