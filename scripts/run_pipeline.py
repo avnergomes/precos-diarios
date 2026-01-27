@@ -21,16 +21,16 @@ def main():
     # Step 1: Download data (if needed)
     print("\n[1/4] Checking for new data to download...")
     try:
-        from scripts.download_data import main as download_main
-        download_main()
+        from scripts.download_data import download_all
+        download_all()
     except Exception as e:
         print(f"Download step skipped: {e}")
 
-    # Step 2: Run scraper (if configured)
+    # Step 2: Run scraper
     print("\n[2/4] Running web scraper...")
     try:
         from api.scraper import scrape_latest_quotations
-        scrape_latest_quotations(days_back=7)
+        scrape_latest_quotations()
     except Exception as e:
         print(f"Scraper step skipped: {e}")
 

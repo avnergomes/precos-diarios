@@ -20,6 +20,14 @@ warnings.filterwarnings('ignore')
 
 logger = logging.getLogger(__name__)
 
+# Check if Prophet is available (heavy dependency, not on Render free tier)
+try:
+    import prophet  # noqa: F401
+    HAS_PROPHET = True
+except ImportError:
+    HAS_PROPHET = False
+    logger.info("Prophet not installed - using ARIMA and Linear models only")
+
 # Configuration
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -483,7 +491,19 @@ def generate_forecast(product: str, horizon: int = 30) -> Dict:
         'modelos': {},
     }
 
-    # Try ARIMA first
+    # Always try linear regression as baseline
+    linear_fit = forecaster.fit_linear()
+    if linear_fit.get('success'):
+        linear_pred = forecaster.predict_linear(horizon)
+        if linear_pred.get('success'):
+            result['modelos']['linear'] = {
+                'nome': 'Regressão Linear',
+                'r_squared': round(linear_fit.get('r_squared', 0), 4),
+                'previsoes': linear_pred['previsoes'],
+                'metricas': linear_pred['metricas'],
+            }
+
+    # Try ARIMA
     arima_fit = forecaster.fit_arima()
     if arima_fit.get('success'):
         arima_pred = forecaster.predict_arima(horizon)
@@ -495,28 +515,16 @@ def generate_forecast(product: str, horizon: int = 30) -> Dict:
                 'metricas': arima_pred['metricas'],
             }
 
-    # Try Prophet
-    prophet_fit = forecaster.fit_prophet()
-    if prophet_fit.get('success'):
-        prophet_pred = forecaster.predict_prophet(horizon)
-        if prophet_pred.get('success'):
-            result['modelos']['prophet'] = {
-                'nome': 'Prophet',
-                'previsoes': prophet_pred['previsoes'],
-                'metricas': prophet_pred['metricas'],
-            }
-
-    # Fallback to linear regression if no models succeeded
-    if not result['modelos']:
-        linear_fit = forecaster.fit_linear()
-        if linear_fit.get('success'):
-            linear_pred = forecaster.predict_linear(horizon)
-            if linear_pred.get('success'):
-                result['modelos']['linear'] = {
-                    'nome': 'Regressão Linear',
-                    'r_squared': round(linear_fit.get('r_squared', 0), 4),
-                    'previsoes': linear_pred['previsoes'],
-                    'metricas': linear_pred['metricas'],
+    # Try Prophet only if installed
+    if HAS_PROPHET:
+        prophet_fit = forecaster.fit_prophet()
+        if prophet_fit.get('success'):
+            prophet_pred = forecaster.predict_prophet(horizon)
+            if prophet_pred.get('success'):
+                result['modelos']['prophet'] = {
+                    'nome': 'Prophet',
+                    'previsoes': prophet_pred['previsoes'],
+                    'metricas': prophet_pred['metricas'],
                 }
 
     result['success'] = len(result['modelos']) > 0

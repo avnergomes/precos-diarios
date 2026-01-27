@@ -30,6 +30,36 @@ JSON_DIR = DATA_DIR / "json"
 app = Flask(__name__)
 CORS(app)
 
+# Import scraper with fallback for different execution contexts
+try:
+    from scraper import scrape_latest_quotations
+except ImportError:
+    from api.scraper import scrape_latest_quotations
+
+# Import forecast with fallback - may not be available if deps missing
+HAS_FORECAST = False
+try:
+    from forecast import generate_forecast, get_available_products
+    HAS_FORECAST = True
+except ImportError:
+    try:
+        from api.forecast import generate_forecast, get_available_products
+        HAS_FORECAST = True
+    except ImportError:
+        logger.warning("Forecast module not available")
+
+# Import ETL with fallback
+try:
+    from etl_process import process_all_files
+except ImportError:
+    from api.etl_process import process_all_files
+
+# Import preprocessing with fallback
+try:
+    from preprocess_data import main as preprocess_main
+except ImportError:
+    from api.preprocess_data import main as preprocess_main
+
 # Ensure directories exist
 JSON_DIR.mkdir(parents=True, exist_ok=True)
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
@@ -40,24 +70,18 @@ def run_pipeline():
     logger.info("Starting ETL pipeline...")
 
     try:
-        # Import and run scraper
-        from scraper import scrape_latest_quotations
         scrape_latest_quotations()
         logger.info("Scraping completed")
     except Exception as e:
         logger.error(f"Scraping error: {e}")
 
     try:
-        # Import and run ETL
-        from etl_process import process_all_files
         process_all_files()
         logger.info("ETL completed")
     except Exception as e:
         logger.error(f"ETL error: {e}")
 
     try:
-        # Import and run preprocessing
-        from preprocess_data import main as preprocess_main
         preprocess_main()
         logger.info("Preprocessing completed")
     except Exception as e:
@@ -194,11 +218,17 @@ def get_forecast(produto):
 
     Query params:
         horizonte: Forecast horizon in days (default: 30)
-        modelo: Model to use ('arima', 'prophet', 'all') (default: 'all')
+        modelo: Model to use ('arima', 'prophet', 'linear', 'all') (default: 'all')
 
     Returns:
         JSON with historical data, predictions, and metrics
     """
+    if not HAS_FORECAST:
+        return jsonify({
+            'success': False,
+            'error': 'Modulo de previsao nao disponivel'
+        }), 503
+
     from flask import request
 
     try:
@@ -207,9 +237,6 @@ def get_forecast(produto):
 
         # Validate horizon
         horizonte = max(7, min(365, horizonte))
-
-        # Import forecasting module
-        from api.forecast import generate_forecast, get_available_products
 
         # Check if product exists
         available = get_available_products()
@@ -240,8 +267,13 @@ def get_forecast(produto):
 @app.route('/api/forecast/produtos')
 def get_forecast_products():
     """Get list of products available for forecasting."""
+    if not HAS_FORECAST:
+        return jsonify({
+            'success': False,
+            'error': 'Modulo de previsao nao disponivel'
+        }), 503
+
     try:
-        from api.forecast import get_available_products
         products = get_available_products()
         return jsonify({
             'success': True,
@@ -271,7 +303,6 @@ def run_scraper():
     """Run only the scraper."""
     logger.info("Starting scraper...")
     try:
-        from scraper import scrape_latest_quotations
         scrape_latest_quotations()
         logger.info("Scraping completed")
     except Exception as e:

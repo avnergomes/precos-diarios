@@ -7,6 +7,7 @@ Fetches latest quotations from the Parana Agriculture website.
 
 import os
 import re
+import json
 import time
 import logging
 import unicodedata
@@ -30,6 +31,11 @@ LINKS_FILE = BASE_DIR / "links.txt"
 
 BASE_URL = "https://www.agricultura.pr.gov.br"
 COTACAO_URL = f"{BASE_URL}/Pagina/Cotacao-Diaria-SIMA-"
+
+# Scraper scan settings
+MAX_FORWARD_SCAN = 500
+MAX_CONSECUTIVE_FAILURES = 15
+STATE_FILE = DATA_DIR / "scraper_state.json"
 
 # Headers to mimic browser
 HEADERS = {
@@ -70,11 +76,29 @@ def get_latest_cotacao_id() -> int:
     """Find the latest quotation ID by checking the links file."""
     if LINKS_FILE.exists():
         with open(LINKS_FILE, 'r') as f:
-            first_line = f.readline().strip()
-            match = re.search(r'SIMA-(\d+)', first_line)
-            if match:
-                return int(match.group(1))
+            for line in f:
+                match = re.search(r'SIMA-(\d+)', line, re.IGNORECASE)
+                if match:
+                    return int(match.group(1))
     return 2520  # Default starting point
+
+
+def load_scraper_state() -> dict:
+    """Load persisted scraper state."""
+    if STATE_FILE.exists():
+        try:
+            with open(STATE_FILE, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {"last_found_id": 2520}
+
+
+def save_scraper_state(state: dict):
+    """Persist scraper state."""
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(STATE_FILE, 'w') as f:
+        json.dump(state, f, indent=2)
 
 
 def fetch_page(url: str, retries: int = 3) -> Optional[str]:
@@ -273,55 +297,56 @@ def get_last_scraped_date() -> Optional[datetime]:
     return None
 
 
-def scrape_latest_quotations(days_back: int = 7):
-    """Scrape the latest quotations that haven't been scraped yet."""
+def scrape_latest_quotations(days_back: int = 7, backfill: bool = False):
+    """Scrape quotations by scanning forward from the last known ID.
+
+    Args:
+        days_back: Not used in new logic, kept for backward compatibility.
+        backfill: If True, scan a much wider range (for historical recovery).
+    """
     logger.info("Starting quotation scraping...")
 
     # Create directories
     SCRAPED_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Get the latest known ID
-    latest_id = get_latest_cotacao_id()
-    logger.info(f"Latest known quotation ID: {latest_id}")
+    # Determine start ID from links.txt and state file
+    links_id = get_latest_cotacao_id()
+    state = load_scraper_state()
+    state_id = state.get("last_found_id", 2520)
+    start_id = max(links_id, state_id)
 
-    # Get last scraped date
-    last_scraped = get_last_scraped_date()
-    logger.info(f"Last scraped date: {last_scraped}")
+    max_scan = MAX_FORWARD_SCAN if not backfill else 1500
+    max_failures = MAX_CONSECUTIVE_FAILURES if not backfill else 30
+
+    logger.info(f"Scanning from ID {start_id} (links={links_id}, state={state_id}), max_scan={max_scan}")
 
     all_records = []
     new_links = []
+    consecutive_failures = 0
+    highest_found = start_id
 
-    # Try scraping newer IDs first
-    for offset in range(0, 20):
-        cotacao_id = latest_id + offset
+    for offset in range(0, max_scan):
+        cotacao_id = start_id + offset
         date, records = scrape_cotacao(cotacao_id)
 
         if records:
             all_records.extend(records)
             new_links.append(f"{COTACAO_URL}{cotacao_id}")
+            highest_found = max(highest_found, cotacao_id)
+            consecutive_failures = 0
             logger.info(f"  Found {len(records)} records for ID {cotacao_id} (date: {date})")
-        elif offset > 5:
-            # Stop if we've tried several IDs without finding data
-            break
+        else:
+            consecutive_failures += 1
+            if consecutive_failures >= max_failures:
+                logger.info(f"  Stopping after {max_failures} consecutive misses at ID {cotacao_id}")
+                break
 
         time.sleep(1)  # Be polite to the server
 
-    # Also scrape recent known IDs if we haven't scraped them recently
-    if last_scraped is None or (datetime.now() - last_scraped).days > 1:
-        for offset in range(1, min(days_back * 2, 30)):
-            cotacao_id = latest_id - offset
-            if cotacao_id < 1:
-                break
-
-            date, records = scrape_cotacao(cotacao_id)
-
-            if records:
-                # Check if this date is newer than our last scrape
-                if last_scraped is None or (date and date > last_scraped):
-                    all_records.extend(records)
-                    logger.info(f"  Found {len(records)} records for ID {cotacao_id} (date: {date})")
-
-            time.sleep(1)
+    # Update state
+    state["last_found_id"] = highest_found
+    state["last_run"] = datetime.now().isoformat()
+    save_scraper_state(state)
 
     if all_records:
         logger.info(f"Total new records scraped: {len(all_records)}")
@@ -345,6 +370,8 @@ def scrape_latest_quotations(days_back: int = 7):
         # Update links file with any new links
         if new_links:
             update_links_file(new_links)
+    else:
+        logger.info("No new records found.")
 
     return all_records
 
@@ -367,4 +394,10 @@ def update_links_file(new_links: List[str]):
 
 
 if __name__ == "__main__":
-    scrape_latest_quotations()
+    import argparse
+    parser = argparse.ArgumentParser(description="SIMA Daily Quotations Scraper")
+    parser.add_argument("--backfill", action="store_true",
+                        help="Run in backfill mode (scan wider range)")
+    args = parser.parse_args()
+
+    scrape_latest_quotations(backfill=args.backfill)
