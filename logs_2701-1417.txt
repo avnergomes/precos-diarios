@@ -1,0 +1,52 @@
+2026-01-27T16:50:29.891598961Z [2026-01-27 16:50:29 +0000] [46] [INFO] Worker exiting (pid: 46)
+2026-01-27T16:50:31.313570568Z [2026-01-27 16:50:31 +0000] [38] [INFO] Shutting down: Master
+2026-01-27T16:54:24.838004205Z ==> Detected service running on port 10000
+2026-01-27T16:54:24.952780052Z ==> Docs on specifying a port: https://render.com/docs/web-services#port-binding
+2026-01-27T16:54:40.328779195Z 127.0.0.1 - - [27/Jan/2026:16:54:40 +0000] "GET /api/data/aggregated.json HTTP/1.1" 304 0 "https://avnergomes.github.io/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+2026-01-27T16:54:40.33001136Z 127.0.0.1 - - [27/Jan/2026:16:54:40 +0000] "GET /api/data/detailed.json HTTP/1.1" 304 0 "https://avnergomes.github.io/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+2026-01-27T16:54:41.068651341Z 127.0.0.1 - - [27/Jan/2026:16:54:41 +0000] "GET /api/forecast/produtos HTTP/1.1" 200 805 "https://avnergomes.github.io/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+2026-01-27T16:54:41.069832216Z 127.0.0.1 - - [27/Jan/2026:16:54:41 +0000] "GET /api/data/filters.json HTTP/1.1" 304 0 "https://avnergomes.github.io/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+2026-01-27T16:54:41.233401746Z 127.0.0.1 - - [27/Jan/2026:16:54:41 +0000] "GET /api/data/detailed.json HTTP/1.1" 304 0 "https://avnergomes.github.io/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+2026-01-27T16:54:41.23764128Z 127.0.0.1 - - [27/Jan/2026:16:54:41 +0000] "GET /api/data/aggregated.json HTTP/1.1" 304 0 "https://avnergomes.github.io/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+2026-01-27T16:54:41.238790425Z 127.0.0.1 - - [27/Jan/2026:16:54:41 +0000] "GET /api/data/timeseries.json HTTP/1.1" 304 0 "https://avnergomes.github.io/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+2026-01-27T16:54:41.253799338Z 127.0.0.1 - - [27/Jan/2026:16:54:41 +0000] "GET /api/data/filters.json HTTP/1.1" 200 0 "https://avnergomes.github.io/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+2026-01-27T16:54:42.062430977Z 127.0.0.1 - - [27/Jan/2026:16:54:42 +0000] "GET /api/forecast/produtos HTTP/1.1" 200 805 "https://avnergomes.github.io/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+2026-01-27T17:08:18.236755154Z ==> Deploying...
+2026-01-27T17:08:18.326354852Z ==> Setting WEB_CONCURRENCY=1 by default, based on available CPUs in the instance
+2026-01-27T17:09:08.899641732Z ==> Running 'gunicorn api.app:app'
+2026-01-27T17:09:21.276906923Z ==> No open ports detected, continuing to scan...
+2026-01-27T17:09:21.403773324Z ==> Docs on specifying a port: https://render.com/docs/web-services#port-binding
+2026-01-27T17:09:26.891160141Z 2026-01-27 17:09:26,890 - INFO - Prophet not installed - using ARIMA and Linear models only
+2026-01-27T17:09:26.902801358Z [2026-01-27 17:09:26 +0000] [56] [INFO] Starting gunicorn 24.1.1
+2026-01-27T17:09:26.903108724Z [2026-01-27 17:09:26 +0000] [56] [INFO] Listening at: http://0.0.0.0:10000 (56)
+2026-01-27T17:09:26.903154814Z [2026-01-27 17:09:26 +0000] [56] [INFO] Using worker: sync
+2026-01-27T17:09:26.994694872Z [2026-01-27 17:09:26 +0000] [64] [INFO] Booting worker with pid: 64
+2026-01-27T17:09:27.406800298Z 127.0.0.1 - - [27/Jan/2026:17:09:27 +0000] "HEAD / HTTP/1.1" 200 0 "-" "Go-http-client/1.1"
+2026-01-27T17:09:28.874889393Z ==> Your service is live 🎉
+2026-01-27T17:09:29.010301764Z 127.0.0.1 - - [27/Jan/2026:17:09:29 +0000] "GET / HTTP/1.1" 200 348 "-" "Go-http-client/2.0"
+2026-01-27T17:09:29.055648955Z ==> 
+2026-01-27T17:09:29.057939393Z ==> ///////////////////////////////////////////////////////////
+2026-01-27T17:09:29.060642998Z ==> 
+2026-01-27T17:09:29.063950783Z ==> Available at your primary URL https://precos-diarios-api.onrender.com
+2026-01-27T17:09:29.06619546Z ==> 
+2026-01-27T17:09:29.068330996Z ==> ///////////////////////////////////////////////////////////
+2026-01-27T17:10:28.386208572Z [2026-01-27 17:10:28 +0000] [56] [INFO] Handling signal: term
+2026-01-27T17:10:28.386565347Z [2026-01-27 17:10:28 +0000] [64] [INFO] Worker exiting (pid: 64)
+2026-01-27T17:10:29.960080045Z [2026-01-27 17:10:29 +0000] [56] [INFO] Shutting down: Master
+2026-01-27T17:13:27.794238503Z 127.0.0.1 - - [27/Jan/2026:17:13:27 +0000] "GET /api/data/detailed.json HTTP/1.1" 200 0 "https://avnergomes.github.io/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+2026-01-27T17:13:27.79625427Z 127.0.0.1 - - [27/Jan/2026:17:13:27 +0000] "GET /api/data/aggregated.json HTTP/1.1" 200 0 "https://avnergomes.github.io/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+2026-01-27T17:13:28.506675208Z 127.0.0.1 - - [27/Jan/2026:17:13:28 +0000] "GET /api/forecast/produtos HTTP/1.1" 200 470 "https://avnergomes.github.io/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+2026-01-27T17:13:28.508897519Z 127.0.0.1 - - [27/Jan/2026:17:13:28 +0000] "GET /api/data/filters.json HTTP/1.1" 200 0 "https://avnergomes.github.io/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+2026-01-27T17:13:28.510767554Z 127.0.0.1 - - [27/Jan/2026:17:13:28 +0000] "GET /api/data/timeseries.json HTTP/1.1" 200 0 "https://avnergomes.github.io/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+2026-01-27T17:14:32.217154547Z ==> Detected service running on port 10000
+2026-01-27T17:14:32.34685333Z ==> Docs on specifying a port: https://render.com/docs/web-services#port-binding
+2026-01-27T17:14:35.79325161Z 2026-01-27 17:14:35,793 - INFO - Loaded 158 months of data for Vaca em pé
+2026-01-27T17:15:04.594435779Z [2026-01-27 17:15:04 +0000] [56] [CRITICAL] WORKER TIMEOUT (pid:64)
+2026-01-27T17:15:05.799323507Z [2026-01-27 17:15:05 +0000] [56] [ERROR] Worker (pid:64) was sent SIGKILL! Perhaps out of memory?
+2026-01-27T17:15:05.803521075Z [2026-01-27 17:15:05 +0000] [73] [INFO] Booting worker with pid: 73
+2026-01-27T17:15:07.093199788Z 2026-01-27 17:15:07,093 - INFO - Loaded 158 months of data for Vaca em pé
+2026-01-27T17:15:36.092321804Z 2026-01-27 17:15:36,092 - ERROR - ARIMA prediction error: 'numpy.ndarray' object has no attribute 'iloc'
+2026-01-27T17:15:36.095207788Z 127.0.0.1 - - [27/Jan/2026:17:15:36 +0000] "GET /api/forecast/Vaca%20em%20p%C3%A9?horizonte=30 HTTP/1.1" 200 1243 "https://avnergomes.github.io/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+2026-01-27T17:16:50.994535926Z 2026-01-27 17:16:50,994 - INFO - Loaded 158 months of data for Vaca em pé
+2026-01-27T17:17:12.193749119Z 2026-01-27 17:17:12,193 - ERROR - ARIMA prediction error: 'numpy.ndarray' object has no attribute 'iloc'
+2026-01-27T17:17:12.194814029Z 127.0.0.1 - - [27/Jan/2026:17:17:12 +0000] "GET /api/forecast/Vaca%20em%20p%C3%A9?horizonte=60 HTTP/1.1" 200 1323 "https://avnergomes.github.io/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
