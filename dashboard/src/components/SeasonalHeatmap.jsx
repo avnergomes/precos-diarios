@@ -163,6 +163,7 @@ export default function SeasonalHeatmap({
           {/* Month rows */}
           {MONTHS.map((monthName, monthIndex) => {
             const month = monthIndex + 1
+            const tooltipBelow = monthIndex < 2
             return (
               <div key={month} className="flex items-center">
                 {/* Month label */}
@@ -195,7 +196,11 @@ export default function SeasonalHeatmap({
 
                       {/* Tooltip */}
                       {hasData && (
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
+                        <div
+                          className={`absolute left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none ${
+                            tooltipBelow ? 'top-full mt-2' : 'bottom-full mb-2'
+                          }`}
+                        >
                           <div className="bg-dark-800 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap">
                             <div className="font-medium">{monthName} {year}</div>
                             <div>{formatCurrency(value)}</div>
