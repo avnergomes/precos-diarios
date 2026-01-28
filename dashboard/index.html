@@ -18,10 +18,11 @@
     <script>
       (function () {
         const TRACKING_URL = 'SEU_APPS_SCRIPT_URL_AQUI';
+        const TRACKING_DEBUG = true;
         let trackingStarted = false;
 
         function log(message, data) {
-          if (window.__TRACKING_DEBUG__) {
+          if (TRACKING_DEBUG || window.__TRACKING_DEBUG__) {
             console.log('[Tracking]', message, data || '');
           }
         }
@@ -38,7 +39,7 @@
 
         function trackVisit(page) {
           if (TRACKING_URL === 'SEU_APPS_SCRIPT_URL_AQUI') {
-            log('Tracking desabilitado - configure TRACKING_URL');
+            console.warn('[Tracking] Tracking desabilitado - configure TRACKING_URL');
             return;
           }
 
