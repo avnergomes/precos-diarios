@@ -18,6 +18,16 @@ const SPREADSHEET_ID = '1bwiH0HTIngFw2ZfAXLQI-YlpajJvVTuFsfugHLYOUhE';
 const SHEET_NAME = 'Tracking Data';
 
 const COLUMNS = [
+  'URL',
+  'Caminho',
+  'Referrer',
+  'Timezone',
+  'Session ID',
+  'User Agent',
+  'Sistema Operacional',
+  'Navegador',
+  'Dispositivo',
+  'Returning Visitor',
   'page',
   'referrer',
   'userAgent',
@@ -144,8 +154,9 @@ function saveToSheet(data) {
     sheet.setFrozenRows(1);
   }
 
+  const enriched = enrichAliases(data);
   const rowData = COLUMNS.map((column) => {
-    const value = data[column];
+    const value = enriched[column];
     if (value === null || value === undefined) return '';
     if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
     if (typeof value === 'object') return JSON.stringify(value);
@@ -154,6 +165,66 @@ function saveToSheet(data) {
 
   const nextRow = sheet.getLastRow() + 1;
   sheet.getRange(nextRow, 1, 1, rowData.length).setValues([rowData]);
+}
+
+function enrichAliases(data) {
+  const result = Object.assign({}, data);
+  const url = data.url || data.URL || data.page || buildUrl(data) || '';
+  const pathname = data.pathname || extractPath(url) || '';
+  const ua = data.userAgent || data['User Agent'] || '';
+  const parsed = parseUserAgent(ua);
+
+  result['URL'] = url;
+  result['Caminho'] = pathname;
+  result['Referrer'] = data.referrer || data.Referrer || '';
+  result['Timezone'] = data.timezone || data.Timezone || '';
+  result['Session ID'] = data.sessionId || data['Session ID'] || '';
+  result['User Agent'] = ua;
+  result['Sistema Operacional'] = parsed.os;
+  result['Navegador'] = parsed.browser;
+  result['Dispositivo'] = parsed.deviceType;
+  result['Returning Visitor'] = data.returningVisitor;
+
+  return result;
+}
+
+function buildUrl(data) {
+  if (!data.protocol || !data.hostname) return '';
+  const path = data.pathname || '';
+  const query = data.queryString || '';
+  return `${data.protocol}//${data.hostname}${path}${query}`;
+}
+
+function extractPath(url) {
+  if (!url) return '';
+  try {
+    return url.split('?')[0].replace(/^https?:\\/\\/[^/]+/i, '');
+  } catch (err) {
+    return '';
+  }
+}
+
+function parseUserAgent(ua) {
+  const value = String(ua || '').toLowerCase();
+  let os = '';
+  let browser = '';
+  let deviceType = 'Desktop';
+
+  if (value.includes('android')) os = 'Android';
+  else if (value.includes('iphone') || value.includes('ipad')) os = 'iOS';
+  else if (value.includes('mac os')) os = 'macOS';
+  else if (value.includes('windows')) os = 'Windows';
+  else if (value.includes('linux')) os = 'Linux';
+
+  if (value.includes('edg/')) browser = 'Edge';
+  else if (value.includes('chrome') && !value.includes('chromium')) browser = 'Chrome';
+  else if (value.includes('safari') && !value.includes('chrome')) browser = 'Safari';
+  else if (value.includes('firefox')) browser = 'Firefox';
+
+  if (value.includes('ipad') || value.includes('tablet')) deviceType = 'Tablet';
+  else if (value.includes('mobi') || value.includes('android') || value.includes('iphone')) deviceType = 'Mobile';
+
+  return { os, browser, deviceType };
 }
 
 function setupSheet() {
