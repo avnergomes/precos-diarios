@@ -1,4 +1,4 @@
-import { Wheat, Github, ExternalLink, Database, Calendar, Clock } from 'lucide-react'
+﻿import { Wheat, Github, ExternalLink, Database, Calendar, Clock } from 'lucide-react'
 import { formatDateTime } from '../utils/format'
 
 export default function Footer({ metadata }) {
@@ -21,12 +21,12 @@ export default function Footer({ metadata }) {
                 <Wheat className="w-5 h-5 text-primary-600" />
               </div>
               <span className="font-display font-bold text-dark-800">
-                Cotações Diárias SIMA
+                CotaÃ§Ãµes DiÃ¡rias SIMA
               </span>
             </div>
             <p className="text-sm text-dark-500 max-w-xs">
-              Painel interativo para visualização de preços diários de produtos
-              agrícolas no estado do Paraná.
+              Painel interativo para visualizaÃ§Ã£o de preÃ§os diÃ¡rios de produtos
+              agrÃ­colas no estado do ParanÃ¡.
             </p>
           </div>
 
@@ -50,7 +50,7 @@ export default function Footer({ metadata }) {
               </li>
               <li>
                 <span className="text-dark-500">
-                  SIMA - Sistema de Informação de Mercado Agrícola
+                  SIMA - Sistema de InformaÃ§Ã£o de Mercado AgrÃ­cola
                 </span>
               </li>
               <li>
@@ -65,7 +65,7 @@ export default function Footer({ metadata }) {
                   rel="noopener noreferrer"
                   className="text-dark-500 hover:text-primary-600 flex items-center gap-1"
                 >
-                  Documentação e downloads
+                  DocumentaÃ§Ã£o e downloads
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </li>
@@ -86,7 +86,7 @@ export default function Footer({ metadata }) {
                   rel="noopener noreferrer"
                   className="text-dark-500 hover:text-primary-600 flex items-center gap-1"
                 >
-                  Repositório no GitHub
+                  RepositÃ³rio no GitHub
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </li>
@@ -97,24 +97,61 @@ export default function Footer({ metadata }) {
                   rel="noopener noreferrer"
                   className="text-dark-500 hover:text-primary-600 flex items-center gap-1"
                 >
-                  IDR-Paraná
+                  IDR-ParanÃ¡
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </li>
             </ul>
           </div>
+                <div className="mt-8">
+          <h4 className="font-semibold text-dark-800">Outros projetos</h4>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a
+              href="https://avnergomes.github.io/portfolio/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center px-3 py-1.5 text-xs rounded-full border border-dark-200 text-dark-600 hover:text-primary-600 hover:border-primary-300 transition-colors"
+            >
+              Portfolio
+            </a>
+            <a
+              href="https://avnergomes.github.io/vbp-parana/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center px-3 py-1.5 text-xs rounded-full border border-dark-200 text-dark-600 hover:text-primary-600 hover:border-primary-300 transition-colors"
+            >
+              VBP Parana
+            </a>
+            <a
+              href="https://avnergomes.github.io/precos-de-terras/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center px-3 py-1.5 text-xs rounded-full border border-dark-200 text-dark-600 hover:text-primary-600 hover:border-primary-300 transition-colors"
+            >
+              Precos de Terras
+            </a>
+            <a
+              href="https://avnergomes.github.io/precos-florestais/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center px-3 py-1.5 text-xs rounded-full border border-dark-200 text-dark-600 hover:text-primary-600 hover:border-primary-300 transition-colors"
+            >
+              Precos Florestais
+            </a>
+          </div>
+        </div>
         </div>
 
         {/* Bottom bar */}
         <div className="mt-8 pt-8 border-t border-dark-200 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-dark-400">
-            {currentYear} Cotações Diárias SIMA. Dados abertos.
+            {currentYear} CotaÃ§Ãµes DiÃ¡rias SIMA. Dados abertos.
           </p>
 
           <div className="flex items-center gap-4">
             <span className="badge badge-green flex items-center gap-1">
               <Calendar className="w-3 h-3" />
-              Período {yearRange}
+              PerÃ­odo {yearRange}
             </span>
             <span className="badge badge-yellow flex items-center gap-1">
               <Database className="w-3 h-3" />
@@ -130,3 +167,4 @@ export default function Footer({ metadata }) {
     </footer>
   )
 }
+
