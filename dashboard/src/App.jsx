@@ -293,7 +293,7 @@ function App() {
                   onClick={refetchForecast}
                   disabled={!forecastProduct || forecastLoading}
                 >
-                  {forecastLoading ? 'Gerando...' : 'Gerar previsÃµes'}
+                  {forecastLoading ? 'Gerando...' : 'Gerar previsões'}
                 </button>
               </div>
             </div>
@@ -343,7 +343,7 @@ function App() {
           ) : (
             <div className="card p-8 text-center">
               <p className="text-dark-500">
-                Selecione um produto e clique em "Gerar previsÃµes" para iniciar.
+                Selecione um produto e clique em "Gerar previsões" para iniciar.
               </p>
             </div>
           )}
