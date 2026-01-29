@@ -7,6 +7,7 @@ import KpiCards from './components/KpiCards'
 import TimeSeriesChart from './components/TimeSeriesChart'
 import CategoryChart from './components/CategoryChart'
 import ProductTable from './components/ProductTable'
+import LatestPrices from './components/LatestPrices'
 import SeasonalHeatmap from './components/SeasonalHeatmap'
 import ForecastChart from './components/ForecastChart'
 import ForecastKpis from './components/ForecastKpis'
@@ -110,6 +111,11 @@ function App() {
         {/* KPIs Section */}
         <section id="kpis">
           <KpiCards aggregations={aggregations} contextLabel={contextLabel} />
+        </section>
+
+        {/* Latest Prices Section */}
+        <section id="latest" className="space-y-6">
+          <LatestPrices records={filteredData} />
         </section>
 
         {/* Evolution Section */}
