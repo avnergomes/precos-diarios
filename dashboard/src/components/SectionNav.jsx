@@ -1,7 +1,8 @@
-import { LayoutDashboard, TrendingUp, BarChart3, Package, LineChart } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, BarChart3, Package, LineChart, Clock } from 'lucide-react'
 
 const SECTIONS = [
   { id: 'kpis', label: 'Resumo', icon: LayoutDashboard },
+  { id: 'latest', label: 'Últimos Preços', icon: Clock },
   { id: 'evolution', label: 'Evolução', icon: TrendingUp },
   { id: 'categories', label: 'Categorias', icon: BarChart3 },
   { id: 'products', label: 'Produtos', icon: Package },
