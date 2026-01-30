@@ -28,13 +28,13 @@ function App() {
   })
 
   // Forecast state
-  const [forecastProduct, setForecastProduct] = useState(null)
+  const [forecastSlug, setForecastSlug] = useState(null)
+  const [forecastProductName, setForecastProductName] = useState(null)
   const [forecastHorizon, setForecastHorizon] = useState(90)
   const { products: forecastProducts } = useForecastProducts()
   const { data: forecastData, loading: forecastLoading, error: forecastError, refetch: refetchForecast } = useForecast(
-    forecastProduct,
+    forecastSlug,
     forecastHorizon,
-    false
   )
 
   const filteredData = useFilteredData(data, filters)
@@ -44,8 +44,7 @@ function App() {
   const productCount = data?.aggregated?.by_product
     ? Object.keys(data.aggregated.by_product).length
     : null
-  const fallbackForecastProducts = data?.filters?.produtos || []
-  const forecastOptions = forecastProducts?.length ? forecastProducts : fallbackForecastProducts
+  const forecastOptions = forecastProducts || []
 
   const filterSummary = useMemo(() => {
     const yearMin = filters.anoMin || metadata?.year_min
@@ -247,7 +246,7 @@ function App() {
             </div>
             <div>
               <h2 className="text-xl font-semibold text-dark-800">Previsões</h2>
-              <p className="text-sm text-dark-500">Modelos ARIMA e Prophet para previsão de preços</p>
+              <p className="text-sm text-dark-500">Modelos de previsão de preços com métricas de ajuste</p>
             </div>
           </div>
 
@@ -259,13 +258,18 @@ function App() {
                   Produto para previsão
                 </label>
                 <select
-                  value={forecastProduct || ''}
-                  onChange={(e) => setForecastProduct(e.target.value || null)}
+                  value={forecastSlug || ''}
+                  onChange={(e) => {
+                    const slug = e.target.value || null
+                    setForecastSlug(slug)
+                    const found = forecastOptions.find(p => p.slug === slug)
+                    setForecastProductName(found?.produto || null)
+                  }}
                   className="filter-select"
                 >
                   <option value="">Selecione um produto</option>
                   {forecastOptions.map(prod => (
-                    <option key={prod} value={prod}>{prod}</option>
+                    <option key={prod.slug} value={prod.slug}>{prod.produto}</option>
                   ))}
                 </select>
               </div>
@@ -291,7 +295,7 @@ function App() {
                   type="button"
                   className="btn-primary w-full"
                   onClick={refetchForecast}
-                  disabled={!forecastProduct || forecastLoading}
+                  disabled={!forecastSlug || forecastLoading}
                 >
                   {forecastLoading ? 'Gerando...' : 'Gerar previsões'}
                 </button>
@@ -300,10 +304,10 @@ function App() {
           </div>
 
           {/* Forecast Content */}
-          {!forecastProduct ? (
+          {!forecastSlug ? (
             <div className="card p-8 text-center">
               <p className="text-dark-500">
-                Selecione um produto acima para ver as previsões com ARIMA e Prophet.
+                Selecione um produto acima para ver as previsões.
               </p>
             </div>
           ) : forecastLoading ? (
@@ -325,7 +329,7 @@ function App() {
               <ForecastChart
                 historico={forecastData.historico}
                 modelos={forecastData.modelos}
-                title={`Previsão: ${forecastProduct}`}
+                title={`Previsão: ${forecastProductName || forecastSlug}`}
                 description="Histórico e previsões com intervalos de confiança de 95%."
               />
 

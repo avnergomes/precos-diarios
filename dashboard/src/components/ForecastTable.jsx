@@ -1,65 +1,60 @@
 import { Download } from 'lucide-react'
 import { formatCurrency } from '../utils/format'
 
-/**
- * ForecastTable - Display detailed forecast values in a table
- */
+const MODEL_LABELS = {
+  linear: 'Linear',
+  arima: 'ARIMA',
+  auto_arima: 'Auto ARIMA',
+  random_forest: 'Random Forest',
+  xgboost: 'XGBoost',
+  prophet: 'Prophet',
+}
+
+const MODEL_COLORS = {
+  linear: 'text-purple-600',
+  arima: 'text-blue-600',
+  auto_arima: 'text-cyan-600',
+  random_forest: 'text-orange-600',
+  xgboost: 'text-red-600',
+  prophet: 'text-green-600',
+}
+
 export default function ForecastTable({
   modelos = {},
   title = 'Previsões detalhadas',
 }) {
-  const arima = modelos.arima?.previsoes || []
-  const prophet = modelos.prophet?.previsoes || []
-  const linear = modelos.linear?.previsoes || []
+  const modelKeys = Object.keys(modelos).filter(k => (modelos[k]?.previsoes?.length || 0) > 0)
 
-  // Determine which models are available
-  const hasArima = arima.length > 0
-  const hasProphet = prophet.length > 0
-  const hasLinear = linear.length > 0
-
-  // Merge forecasts by date
+  // Merge all forecasts by date
   const forecastMap = {}
 
-  arima.forEach(item => {
-    if (!forecastMap[item.data]) {
-      forecastMap[item.data] = { data: item.data }
-    }
-    forecastMap[item.data].arima = item.previsto
-    forecastMap[item.data].arima_ic = `${formatCurrency(item.ic_inferior)} - ${formatCurrency(item.ic_superior)}`
-  })
-
-  prophet.forEach(item => {
-    if (!forecastMap[item.data]) {
-      forecastMap[item.data] = { data: item.data }
-    }
-    forecastMap[item.data].prophet = item.previsto
-    forecastMap[item.data].prophet_ic = `${formatCurrency(item.ic_inferior)} - ${formatCurrency(item.ic_superior)}`
-  })
-
-  linear.forEach(item => {
-    if (!forecastMap[item.data]) {
-      forecastMap[item.data] = { data: item.data }
-    }
-    forecastMap[item.data].linear = item.previsto
-    forecastMap[item.data].linear_ic = `${formatCurrency(item.ic_inferior)} - ${formatCurrency(item.ic_superior)}`
+  modelKeys.forEach(key => {
+    const previsoes = modelos[key]?.previsoes || []
+    previsoes.forEach(item => {
+      if (!forecastMap[item.data]) {
+        forecastMap[item.data] = { data: item.data }
+      }
+      forecastMap[item.data][key] = item.previsto
+      forecastMap[item.data][`${key}_ic`] = `${formatCurrency(item.ic_inferior)} – ${formatCurrency(item.ic_superior)}`
+    })
   })
 
   const forecasts = Object.values(forecastMap).sort(
     (a, b) => new Date(a.data) - new Date(b.data)
   )
 
-  // Export to CSV
   const exportCSV = () => {
     const headers = ['Data']
-    if (hasArima) headers.push('ARIMA', 'IC 95% ARIMA')
-    if (hasProphet) headers.push('Prophet', 'IC 95% Prophet')
-    if (hasLinear) headers.push('Linear', 'IC 95% Linear')
+    modelKeys.forEach(key => {
+      const label = MODEL_LABELS[key] || key
+      headers.push(label, `IC 95% ${label}`)
+    })
 
     const rows = forecasts.map(f => {
       const row = [f.data]
-      if (hasArima) row.push(f.arima?.toFixed(2) || '', f.arima_ic || '')
-      if (hasProphet) row.push(f.prophet?.toFixed(2) || '', f.prophet_ic || '')
-      if (hasLinear) row.push(f.linear?.toFixed(2) || '', f.linear_ic || '')
+      modelKeys.forEach(key => {
+        row.push(f[key]?.toFixed(2) || '', f[`${key}_ic`] || '')
+      })
       return row
     })
 
@@ -98,35 +93,27 @@ export default function ForecastTable({
           <thead>
             <tr className="table-header">
               <th className="px-4 py-3 text-left">Data</th>
-              {hasArima && <th className="px-4 py-3 text-right text-blue-600">ARIMA</th>}
-              {hasProphet && <th className="px-4 py-3 text-right text-green-600">Prophet</th>}
-              {hasLinear && <th className="px-4 py-3 text-right text-purple-600">Linear</th>}
+              {modelKeys.map(key => (
+                <th key={key} className={`px-4 py-3 text-right ${MODEL_COLORS[key] || 'text-dark-600'}`}>
+                  {MODEL_LABELS[key] || key}
+                </th>
+              ))}
               <th className="px-4 py-3 text-right text-dark-500">IC 95%</th>
             </tr>
           </thead>
           <tbody>
-            {forecasts.map((forecast, index) => (
+            {forecasts.map(forecast => (
               <tr key={forecast.data} className="table-row">
                 <td className="px-4 py-3 font-medium">
                   {formatDate(forecast.data)}
                 </td>
-                {hasArima && (
-                  <td className="px-4 py-3 text-right text-blue-600 font-medium">
-                    {forecast.arima ? formatCurrency(forecast.arima) : '-'}
+                {modelKeys.map(key => (
+                  <td key={key} className={`px-4 py-3 text-right font-medium ${MODEL_COLORS[key] || ''}`}>
+                    {forecast[key] != null ? formatCurrency(forecast[key]) : '-'}
                   </td>
-                )}
-                {hasProphet && (
-                  <td className="px-4 py-3 text-right text-green-600 font-medium">
-                    {forecast.prophet ? formatCurrency(forecast.prophet) : '-'}
-                  </td>
-                )}
-                {hasLinear && (
-                  <td className="px-4 py-3 text-right text-purple-600 font-medium">
-                    {forecast.linear ? formatCurrency(forecast.linear) : '-'}
-                  </td>
-                )}
+                ))}
                 <td className="px-4 py-3 text-right text-dark-400 text-sm">
-                  {forecast.arima_ic || forecast.prophet_ic || forecast.linear_ic || '-'}
+                  {modelKeys.map(k => forecast[`${k}_ic`]).find(v => v) || '-'}
                 </td>
               </tr>
             ))}
@@ -137,7 +124,6 @@ export default function ForecastTable({
   )
 }
 
-// Format date for display
 function formatDate(dateStr) {
   if (!dateStr) return ''
   const date = new Date(dateStr)

@@ -1,0 +1,204 @@
+{
+  "gerado_em": "2026-01-30T12:07:10.003109",
+  "total": 18,
+  "produtos": [
+    {
+      "produto": "Arroz em casca tipo 1",
+      "slug": "arroz-em-casca-tipo-1",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
+    {
+      "produto": "Boi em pé",
+      "slug": "boi-em-pe",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
+    {
+      "produto": "Café beneficiado bebida dura tipo 6",
+      "slug": "cafe-beneficiado-bebida-dura-tipo-6",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
+    {
+      "produto": "Café em coco",
+      "slug": "cafe-em-coco",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
+    {
+      "produto": "Erva-mate",
+      "slug": "erva-mate",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
+    {
+      "produto": "Erva-mate folha em barranco",
+      "slug": "erva-mate-folha-em-barranco",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
+    {
+      "produto": "Feijão carioca tipo 1",
+      "slug": "feijao-carioca-tipo-1",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
+    {
+      "produto": "Feijão de cor tipo 1",
+      "slug": "feijao-de-cor-tipo-1",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
+    {
+      "produto": "Feijão preto tipo 1",
+      "slug": "feijao-preto-tipo-1",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
+    {
+      "produto": "Frango de corte",
+      "slug": "frango-de-corte",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
+    {
+      "produto": "Mandioca industrial",
+      "slug": "mandioca-industrial",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
+    {
+      "produto": "Milho amarelo tipo 1",
+      "slug": "milho-amarelo-tipo-1",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
+    {
+      "produto": "Milho comum",
+      "slug": "milho-comum",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
+    {
+      "produto": "Soja industrial tipo 1",
+      "slug": "soja-industrial-tipo-1",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
+    {
+      "produto": "Suíno em pé tipo carne não integrado",
+      "slug": "suino-em-pe-tipo-carne-nao-integrado",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
+    {
+      "produto": "Trigo",
+      "slug": "trigo",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
+    {
+      "produto": "Trigo pão",
+      "slug": "trigo-pao",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
+    {
+      "produto": "Vaca em pé",
+      "slug": "vaca-em-pe",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    }
+  ]
+}

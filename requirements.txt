@@ -14,9 +14,10 @@ numpy>=1.24.0
 openpyxl>=3.1.0
 xlrd>=2.0.0
 
-# Time Series Forecasting (lightweight - no Prophet on Render free tier)
+# Time Series Forecasting
 statsmodels>=0.14.0
 scikit-learn>=1.3.0
+xgboost>=2.0.0
 
 # HTTP requests & Web scraping
 requests>=2.31.0
