@@ -30,9 +30,9 @@ CSV_PATH = BASE_DIR / "data" / "processed" / "consolidated.csv"
 OUTPUT_DIR = BASE_DIR / "dashboard" / "public" / "data" / "forecasts"
 PRODUCTS_JSON = BASE_DIR / "dashboard" / "public" / "data" / "forecast_products.json"
 
-MIN_MONTHS = 6
+MIN_MONTHS = 24      # minimum for seasonal models (2 full annual cycles)
 HORIZON_MONTHS = 12  # pre-compute 12 months; frontend trims by user selection
-HISTORY_MONTHS = 24
+HISTORY_MONTHS = 36
 CONFIDENCE = 0.05  # 95% CI
 
 # Optional heavy deps
