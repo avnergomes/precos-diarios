@@ -4,7 +4,7 @@ import { formatCategoryName, formatCurrency, formatNumber, getUnitForProduct } f
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
-  const date = new Date(dateStr)
+  const date = new Date(dateStr + 'T12:00:00')
   if (Number.isNaN(date.getTime())) return dateStr
   return date.toLocaleDateString('pt-BR', {
     day: '2-digit',
