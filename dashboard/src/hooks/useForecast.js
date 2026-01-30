@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 
-// API URL from environment variable or fallback
-const API_URL = import.meta.env.VITE_API_URL || ''
+const BASE = import.meta.env.BASE_URL || '/'
 
 /**
- * Hook to fetch forecast data for a product
+ * Hook to load pre-computed forecast for a product (static JSON).
  */
-export function useForecast(produto, horizonte = 30, auto = true) {
+export function useForecast(produto, horizonte = 30) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -21,20 +20,32 @@ export function useForecast(produto, horizonte = 30, auto = true) {
     setError(null)
 
     try {
-      const url = `${API_URL}/api/forecast/${encodeURIComponent(produto)}?horizonte=${horizonte}`
+      const slug = produto.slug || produto
+      const url = `${BASE}data/forecasts/${encodeURIComponent(slug)}.json`
       const response = await fetch(url)
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        throw new Error(`Previsão não disponível (${response.status})`)
       }
 
       const result = await response.json()
 
       if (!result.success) {
-        throw new Error(result.error || 'Forecast failed')
+        throw new Error(result.error || 'Falha ao carregar previsão')
       }
 
-      setData(result)
+      // Trim forecasts to match selected horizon (months)
+      const months = Math.max(1, Math.round(horizonte / 30))
+      const trimmed = { ...result }
+      trimmed.modelos = {}
+      for (const [key, model] of Object.entries(result.modelos || {})) {
+        trimmed.modelos[key] = {
+          ...model,
+          previsoes: (model.previsoes || []).slice(0, months),
+        }
+      }
+
+      setData(trimmed)
     } catch (err) {
       console.error('Forecast error:', err)
       setError(err.message)
@@ -44,26 +55,17 @@ export function useForecast(produto, horizonte = 30, auto = true) {
     }
   }, [produto, horizonte])
 
+  // Reset state when product changes
   useEffect(() => {
-    if (!auto) {
-      if (!produto) {
-        setData(null)
-        setError(null)
-      } else {
-        setData(null)
-        setError(null)
-      }
-      return
-    }
-
-    fetchForecast()
-  }, [auto, fetchForecast, produto, horizonte])
+    setData(null)
+    setError(null)
+  }, [produto])
 
   return { data, loading, error, refetch: fetchForecast }
 }
 
 /**
- * Hook to fetch list of products available for forecasting
+ * Hook to load list of products available for forecasting (static JSON).
  */
 export function useForecastProducts() {
   const [products, setProducts] = useState([])
@@ -71,22 +73,17 @@ export function useForecastProducts() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    async function fetchProducts() {
+    async function load() {
       try {
-        const url = `${API_URL}/api/forecast/produtos`
+        const url = `${BASE}data/forecast_products.json`
         const response = await fetch(url)
 
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
+          throw new Error(`HTTP ${response.status}`)
         }
 
         const result = await response.json()
-
-        if (result.success) {
-          setProducts(result.produtos || [])
-        } else {
-          throw new Error(result.error || 'Failed to load products')
-        }
+        setProducts(result.produtos || [])
       } catch (err) {
         console.error('Error loading forecast products:', err)
         setError(err.message)
@@ -95,7 +92,7 @@ export function useForecastProducts() {
       }
     }
 
-    fetchProducts()
+    load()
   }, [])
 
   return { products, loading, error }

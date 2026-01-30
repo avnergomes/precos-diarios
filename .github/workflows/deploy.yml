@@ -21,6 +21,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate forecasts
+        run: python scripts/generate_forecasts.py
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -34,8 +46,6 @@ jobs:
 
       - name: Build
         working-directory: dashboard
-        env:
-          VITE_API_URL: https://precos-diarios-api.onrender.com
         run: npm run build
 
       - name: Setup Pages
