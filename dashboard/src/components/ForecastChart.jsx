@@ -234,7 +234,7 @@ export default function ForecastChart({
 
 function formatDateLabel(dateStr) {
   if (!dateStr) return ''
-  const date = new Date(dateStr)
+  const date = new Date(dateStr + 'T12:00:00')
   const month = date.toLocaleDateString('pt-BR', { month: 'short' })
   const year = date.getFullYear().toString().slice(-2)
   return `${month}/${year}`
