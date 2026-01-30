@@ -1,0 +1,89 @@
+name: Data Pipeline - Scrape & Update
+
+on:
+  schedule:
+    # Runs Mon-Fri at 11:00 UTC (08:00 BRT)
+    - cron: '0 11 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force full rebuild of JSONs and forecasts even without new data'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: "data-pipeline"
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run incremental update
+        id: update
+        run: |
+          if python scripts/update_data.py; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Force rebuild (if requested)
+        if: github.event.inputs.force_rebuild == 'true' && steps.update.outputs.has_changes == 'false'
+        run: |
+          python -c "
+          import sys; sys.path.insert(0, '.')
+          from api.preprocess_data import main as preprocess
+          preprocess()
+          "
+          python -c "
+          import shutil; from pathlib import Path
+          src = Path('data/json'); dst = Path('dashboard/public/data')
+          dst.mkdir(parents=True, exist_ok=True)
+          [shutil.copy2(f, dst / f.name) for f in src.glob('*.json')]
+          "
+          python scripts/generate_forecasts.py
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+
+      - name: Check for changes
+        id: check
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "$(cat <<'EOF'
+          Atualiza dados SIMA via pipeline automático
+
+          Scraping + ETL + previsões executados automaticamente.
+          EOF
+          )"
+          git push
