@@ -2,8 +2,8 @@ name: Data Pipeline - Scrape & Update
 
 on:
   schedule:
-    # Runs Mon-Fri at 11:00 UTC (08:00 BRT)
-    - cron: '0 11 * * 1-5'
+    # Runs Mon-Fri at 16:00 UTC (13:00 BRT)
+    - cron: '0 16 * * 1-5'
   workflow_dispatch:
     inputs:
       force_rebuild:
