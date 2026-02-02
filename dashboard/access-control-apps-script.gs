@@ -23,7 +23,7 @@
  * - Aba "log"
  *   Colunas: timestamp | email | site | code | result | user_agent | ip
  */
-const SPREADSHEET_ID = '1bwiH0HTIngFw2ZfAXLQI-YlpajJvVTuFsfugHLYOUhE';
+const SPREADSHEET_ID = 'SEU_SPREADSHEET_ID_AQUI';
 const ACCESS_SHEET = 'access';
 const LOG_SHEET = 'log';
 
