@@ -107,14 +107,6 @@ export default function Footer({ metadata }) {
           <h4 className="font-semibold text-dark-800">Outros projetos</h4>
           <div className="mt-3 flex flex-wrap gap-2">
             <a
-              href="https://avnergomes.github.io/portfolio/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center px-3 py-1.5 text-xs rounded-full border border-dark-200 text-dark-600 hover:text-primary-600 hover:border-primary-300 transition-colors"
-            >
-              Portfolio
-            </a>
-            <a
               href="https://avnergomes.github.io/vbp-parana/"
               target="_blank"
               rel="noopener noreferrer"
