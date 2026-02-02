@@ -18,7 +18,7 @@
     <script>
       (function () {
         const TRACKING_URL = 'https://script.google.com/macros/s/AKfycbwrEYNc3dbDWfKJwNacZR5AXAon6S6yeFyiRJSkK2dFwhsgsak9stu-Jq1g_JGQjsjF/exec';
-        const TRACKING_DEBUG = true;
+        const TRACKING_DEBUG = false;
         let trackingStarted = false;
 
         function log(message, data) {
@@ -69,6 +69,7 @@
           })();
 
           const visitData = {
+            origin: window.location.origin,
             page: page || window.location.pathname + window.location.hash,
             referrer: document.referrer || 'direto',
             userAgent: navigator.userAgent,
