@@ -1,4 +1,4 @@
-import { Wheat, Github, ExternalLink, Database, Calendar, Clock } from 'lucide-react'
+import { Database, ExternalLink, Calendar } from 'lucide-react'
 import { formatDateTime } from '../utils/format'
 
 export default function Footer({ metadata }) {
@@ -12,148 +12,97 @@ export default function Footer({ metadata }) {
 
   return (
     <footer className="mt-12 border-t border-dark-200 bg-white/50 backdrop-blur-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Brand */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <Wheat className="w-5 h-5 text-primary-600" />
-              </div>
-              <span className="font-display font-bold text-dark-800">
-                Cotações Diárias SIMA
-              </span>
-            </div>
-            <p className="text-sm text-dark-500 max-w-xs">
-              Painel interativo para visualização de preços diários de produtos
-              agrícolas no estado do Paraná.
-            </p>
-          </div>
-
-          {/* Data Sources */}
-          <div className="space-y-4">
-            <h4 className="font-semibold text-dark-800 flex items-center gap-2">
-              <Database className="w-4 h-4" />
+          {/* Fonte de Dados */}
+          <div className="space-y-3">
+            <h4 className="font-semibold text-dark-800 text-sm flex items-center gap-2">
+              <Database className="w-4 h-4 text-primary-600" />
               Fonte de Dados
             </h4>
-            <ul className="space-y-2 text-sm">
-              <li>
-                <a
-                  href="https://www.agricultura.pr.gov.br"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-dark-500 hover:text-primary-600 flex items-center gap-1"
-                >
-                  SEAB - Secretaria de Agricultura
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </li>
-              <li>
-                <span className="text-dark-500">
-                  SIMA - Sistema de Informação de Mercado Agrícola
-                </span>
-              </li>
-              <li>
-                <span className="text-dark-500">
-                  DERAL - Departamento de Economia Rural
-                </span>
-              </li>
-              <li>
-                <a
-                  href="https://www.agricultura.pr.gov.br/Pagina/Cotacao-Diaria-SIMA-2520"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-dark-500 hover:text-primary-600 flex items-center gap-1"
-                >
-                  Documentação e downloads
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </li>
+            <ul className="space-y-1.5 text-xs text-dark-500">
+              <li>SIMA - Sistema de Informação de Mercado Agrícola</li>
+              <li>DERAL - Departamento de Economia Rural</li>
+              <li>SEAB - Secretaria da Agricultura do Paraná</li>
             </ul>
+            <p className="text-xs text-dark-400">Período: {yearRange}</p>
           </div>
 
-          {/* Links */}
-          <div className="space-y-4">
-            <h4 className="font-semibold text-dark-800 flex items-center gap-2">
-              <Github className="w-4 h-4" />
-              Projeto
+          {/* Datageo Paraná */}
+          <div className="space-y-3">
+            <h4 className="font-semibold text-dark-800 text-sm">
+              <a
+                href="https://datageoparana.github.io"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-primary-600 transition-colors inline-flex items-center gap-1"
+              >
+                Datageo Paraná
+                <ExternalLink className="w-3 h-3" />
+              </a>
             </h4>
-            <ul className="space-y-2 text-sm">
-              <li>
-                <a
-                  href="https://github.com/idr-pr/precos-diarios"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-dark-500 hover:text-primary-600 flex items-center gap-1"
-                >
-                  Repositório no GitHub
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://www.idrparana.pr.gov.br"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-dark-500 hover:text-primary-600 flex items-center gap-1"
-                >
-                  IDR-Paraná
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </li>
-            </ul>
+            <div className="flex flex-wrap gap-1.5">
+              <a
+                href="https://avnergomes.github.io/vbp-parana/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center px-2.5 py-1 text-[10px] rounded-full border border-dark-200 text-dark-600 hover:text-primary-600 hover:border-primary-300 transition-colors"
+              >
+                VBP Paraná
+              </a>
+              <a
+                href="https://avnergomes.github.io/precos-florestais/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center px-2.5 py-1 text-[10px] rounded-full border border-dark-200 text-dark-600 hover:text-primary-600 hover:border-primary-300 transition-colors"
+              >
+                Preços Florestais
+              </a>
+              <a
+                href="https://avnergomes.github.io/precos-de-terras/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center px-2.5 py-1 text-[10px] rounded-full border border-dark-200 text-dark-600 hover:text-primary-600 hover:border-primary-300 transition-colors"
+              >
+                Preços de Terras
+              </a>
+              <a
+                href="https://avnergomes.github.io/comexstat-parana/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center px-2.5 py-1 text-[10px] rounded-full border border-dark-200 text-dark-600 hover:text-primary-600 hover:border-primary-300 transition-colors"
+              >
+                ComexStat Paraná
+              </a>
+            </div>
           </div>
-                <div className="mt-8">
-          <h4 className="font-semibold text-dark-800">Outros projetos</h4>
-          <div className="mt-3 flex flex-wrap gap-2">
+
+          {/* Developer */}
+          <div className="space-y-3 flex flex-col items-start md:items-end">
             <a
-              href="https://avnergomes.github.io/vbp-parana/"
+              href="https://avnergomes.github.io/portfolio"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center px-3 py-1.5 text-xs rounded-full border border-dark-200 text-dark-600 hover:text-primary-600 hover:border-primary-300 transition-colors"
+              className="flex items-center gap-2 text-dark-500 hover:text-primary-600 transition-colors group"
+              title="Portfolio"
             >
-              VBP Paraná
-            </a>
-            <a
-              href="https://avnergomes.github.io/precos-de-terras/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center px-3 py-1.5 text-xs rounded-full border border-dark-200 text-dark-600 hover:text-primary-600 hover:border-primary-300 transition-colors"
-            >
-              Preços de Terras
-            </a>
-            <a
-              href="https://avnergomes.github.io/precos-florestais/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center px-3 py-1.5 text-xs rounded-full border border-dark-200 text-dark-600 hover:text-primary-600 hover:border-primary-300 transition-colors"
-            >
-              Preços Florestais
+              <img
+                src={`${import.meta.env.BASE_URL}assets/logo.png`}
+                alt="Avner Gomes"
+                className="w-8 h-8 rounded-full opacity-80 group-hover:opacity-100 transition-opacity"
+              />
+              <span className="text-xs">Desenvolvido por Avner Gomes</span>
             </a>
           </div>
         </div>
-        </div>
 
-        {/* Bottom bar */}
-        <div className="mt-8 pt-8 border-t border-dark-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-sm text-dark-400">
-            {currentYear} Cotações Diárias SIMA. Dados abertos.
-          </p>
-
-          <div className="flex items-center gap-4">
-            <span className="badge badge-green flex items-center gap-1">
-              <Calendar className="w-3 h-3" />
-              Período {yearRange}
-            </span>
-            <span className="badge badge-yellow flex items-center gap-1">
-              <Database className="w-3 h-3" />
-              SIMA
-            </span>
-            <span className="badge badge-blue flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              Atualizado em {lastUpdate}
-            </span>
-          </div>
+        {/* Bottom */}
+        <div className="mt-6 pt-4 border-t border-dark-200 flex items-center justify-between text-[10px] text-dark-400">
+          <p>&copy; {currentYear} Cotações Diárias SIMA. Dados públicos.</p>
+          <span className="flex items-center gap-1 px-2 py-0.5 bg-primary-50 text-primary-700 rounded-full">
+            <Calendar className="w-3 h-3" />
+            Atualizado em {lastUpdate}
+          </span>
         </div>
       </div>
     </footer>
