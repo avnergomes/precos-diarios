@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { useData, useFilteredData, useAggregations, useFilteredTimeSeries } from './hooks/useData'
 import { useForecast, useForecastProducts } from './hooks/useForecast'
 import Header from './components/Header'
@@ -41,6 +41,22 @@ function App() {
   const aggregations = useAggregations(filteredData, data)
   const filteredTimeSeries = useFilteredTimeSeries(filteredData)
   const metadata = data?.aggregated?.metadata
+
+  // Click-to-filter handlers
+  const handleCategoriaClick = useCallback((categoria) => {
+    setFilters(prev => ({
+      ...prev,
+      categoria: prev.categoria === categoria ? null : categoria,
+      produto: null, // Clear product when changing category
+    }))
+  }, [])
+
+  const handleProdutoClick = useCallback((produto) => {
+    setFilters(prev => ({
+      ...prev,
+      produto: prev.produto === produto ? null : produto,
+    }))
+  }, [])
   const productCount = data?.aggregated?.by_product
     ? Object.keys(data.aggregated.by_product).length
     : null
@@ -163,12 +179,16 @@ function App() {
               title="Preço médio por categoria"
               description="Comparação entre categorias."
               xAxisLabel="Preço médio (R$)"
+              onCategoriaClick={handleCategoriaClick}
+              selectedCategoria={filters.categoria}
             />
             <CategoryChart
               data={aggregations?.byCategory}
               title="Distribuição de registros"
               description="Participação por categoria."
               showPie
+              onCategoriaClick={handleCategoriaClick}
+              selectedCategoria={filters.categoria}
             />
           </div>
 
@@ -190,7 +210,13 @@ function App() {
                   {Object.entries(aggregations?.byCategory || {})
                     .sort((a, b) => b[1].registros - a[1].registros)
                     .map(([cat, stats]) => (
-                      <tr key={cat} className="table-row">
+                      <tr
+                        key={cat}
+                        onClick={() => handleCategoriaClick(cat)}
+                        className={`table-row cursor-pointer hover:bg-primary-50 ${
+                          filters.categoria === cat ? 'bg-primary-100 ring-1 ring-primary-400' : ''
+                        }`}
+                      >
                         <td className="px-4 py-3 font-medium">{formatCategoryName(cat)}</td>
                         <td className="px-4 py-3 text-right">
                           R$ {stats.media?.toFixed(2)}
@@ -212,6 +238,9 @@ function App() {
                 </tbody>
               </table>
             </div>
+            <p className="text-xs text-center text-dark-400 mt-3">
+              Clique em uma linha para filtrar por categoria
+            </p>
           </div>
         </section>
 
@@ -235,6 +264,8 @@ function App() {
             searchable
             showSparkline
             sparklineData={aggregations?.sparklineData}
+            onProdutoClick={handleProdutoClick}
+            selectedProduto={filters.produto}
           />
         </section>
 

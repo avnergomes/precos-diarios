@@ -58,265 +58,80 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Tracking LGPD-compliant (19 campos anonimos) -->
     <script>
-      (function () {
-        const TRACKING_URL = 'https://script.google.com/macros/s/AKfycbyk8VzLygqFmid0cSB5Qge8yRKRV-hJNvWlCSZBPrOCnyJyTd21d-6mNRjyJ7NIr_-36Q/exec';
-        const TRACKING_DEBUG = false;
-        let trackingStarted = false;
-
-        function log(message, data) {
-          if (TRACKING_DEBUG || window.__TRACKING_DEBUG__) {
-            console.log('[Tracking]', message, data || '');
-          }
+      (function() {
+        function getDeviceType() {
+          var ua = navigator.userAgent;
+          if (/tablet|ipad|playbook|silk/i.test(ua)) return 'Tablet';
+          if (/Mobile|Android|iPhone|iPod|webOS|BlackBerry|Opera Mini|IEMobile/i.test(ua)) return 'Mobile';
+          return 'Desktop';
         }
 
-        function getSessionId() {
-          let sessionId = sessionStorage.getItem('pd_session_id');
-          if (!sessionId) {
-            sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            sessionStorage.setItem('pd_session_id', sessionId);
-            log('Novo sessionId criado:', sessionId);
+        function getConnectionType() {
+          if (navigator.connection) {
+            return navigator.connection.effectiveType || 'unknown';
           }
-          return sessionId;
+          return 'unknown';
         }
 
-        function trackVisit(page) {
-          if (TRACKING_URL === 'SEU_APPS_SCRIPT_URL_AQUI') {
-            console.warn('[Tracking] Tracking desabilitado - configure TRACKING_URL');
-            return;
-          }
+        function getUTMParams() {
+          var params = new URLSearchParams(window.location.search);
+          return {
+            utmSource: params.get('utm_source') || '',
+            utmMedium: params.get('utm_medium') || '',
+            utmCampaign: params.get('utm_campaign') || '',
+            utmTerm: params.get('utm_term') || '',
+            utmContent: params.get('utm_content') || ''
+          };
+        }
 
-          const perfTiming = performance.timing;
-          const perfEntries = performance.getEntriesByType ? performance.getEntriesByType('navigation')[0] : null;
-          const paintEntries = performance.getEntriesByType ? performance.getEntriesByType('paint') : [];
-
-          const urlParams = new URLSearchParams(window.location.search);
-          const utmSource = urlParams.get('utm_source') || '';
-          const utmMedium = urlParams.get('utm_medium') || '';
-          const utmCampaign = urlParams.get('utm_campaign') || '';
-          const utmTerm = urlParams.get('utm_term') || '';
-          const utmContent = urlParams.get('utm_content') || '';
-
-          const returningVisitor = (function () {
-            try {
-              const hasVisitedBefore = localStorage.getItem('pd_has_visited');
-              if (!hasVisitedBefore) {
-                localStorage.setItem('pd_has_visited', 'true');
-                localStorage.setItem('pd_first_visit', new Date().toISOString());
-                return false;
-              }
-              return true;
-            } catch (e) {
-              return false;
+        window.addEventListener('load', function() {
+          setTimeout(function() {
+            var loadTime = 0;
+            if (window.performance && window.performance.timing) {
+              var timing = window.performance.timing;
+              loadTime = timing.loadEventEnd - timing.navigationStart;
             }
-          })();
 
-          const visitData = {
-            origin: window.location.origin,
-            page: page || window.location.pathname + window.location.hash,
-            referrer: document.referrer || 'direto',
-            userAgent: navigator.userAgent,
-            language: navigator.language,
-            screenWidth: screen.width,
-            screenHeight: screen.height,
-            platform: navigator.platform,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            sessionId: getSessionId(),
-            timestamp: new Date().toISOString(),
-            returningVisitor: returningVisitor,
+            var utmParams = getUTMParams();
 
-            colorDepth: screen.colorDepth || null,
-            pixelRatio: window.devicePixelRatio || 1,
-            viewportWidth: window.innerWidth || null,
-            viewportHeight: window.innerHeight || null,
-            touchSupport: navigator.maxTouchPoints > 0,
-            cpuCores: navigator.hardwareConcurrency || null,
-            deviceMemory: navigator.deviceMemory || null,
+            var data = {
+              origin: window.location.origin,
+              timestamp: new Date().toISOString(),
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              timezoneOffset: new Date().getTimezoneOffset(),
+              page: window.location.href,
+              pathname: window.location.pathname,
+              referrer: document.referrer || '',
+              pageTitle: document.title,
+              language: navigator.language,
+              deviceType: getDeviceType(),
+              screenOrientation: screen.orientation ? screen.orientation.type : 'unknown',
+              connectionType: getConnectionType(),
+              loadTime: loadTime > 0 ? loadTime : '',
+              utmSource: utmParams.utmSource,
+              utmMedium: utmParams.utmMedium,
+              utmCampaign: utmParams.utmCampaign,
+              utmTerm: utmParams.utmTerm,
+              utmContent: utmParams.utmContent,
+              prefersColorScheme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+            };
 
-            vendor: navigator.vendor || 'unknown',
-            cookiesEnabled: navigator.cookieEnabled,
-            doNotTrack: navigator.doNotTrack === '1',
-            onlineStatus: navigator.onLine,
+            var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyk8VzLygqFmid0cSB5Qge8yRKRV-hJNvWlCSZBPrOCnyJyTd21d-6mNRjyJ7NIr_-36Q/exec';
 
-            connectionType: navigator.connection?.effectiveType || 'unknown',
-            connectionSpeed: navigator.connection?.downlink || null,
-            saveDataMode: navigator.connection?.saveData || false,
-
-            protocol: window.location.protocol,
-            hostname: window.location.hostname,
-            pathname: window.location.pathname,
-            queryString: window.location.search || '',
-            pageTitle: document.title,
-
-            loadTime: performance.timing.loadEventEnd > 0
-              ? performance.timing.loadEventEnd - performance.timing.navigationStart
-              : null,
-
-            screenOrientation: screen.orientation?.type || 'unknown',
-            timezoneOffset: new Date().getTimezoneOffset(),
-
-            dnsLookupTime: perfTiming.domainLookupEnd > 0 ? perfTiming.domainLookupEnd - perfTiming.domainLookupStart : null,
-            tcpConnectionTime: perfTiming.connectEnd > 0 ? perfTiming.connectEnd - perfTiming.connectStart : null,
-            serverResponseTime: perfTiming.responseEnd > 0 ? perfTiming.responseEnd - perfTiming.requestStart : null,
-            domContentLoadedTime: perfTiming.domContentLoadedEventEnd > 0 ? perfTiming.domContentLoadedEventEnd - perfTiming.navigationStart : null,
-            domInteractiveTime: perfTiming.domInteractive > 0 ? perfTiming.domInteractive - perfTiming.navigationStart : null,
-            firstPaint: paintEntries.find((e) => e.name === 'first-paint')?.startTime || null,
-            firstContentfulPaint: paintEntries.find((e) => e.name === 'first-contentful-paint')?.startTime || null,
-            transferSize: perfEntries?.transferSize || null,
-            encodedBodySize: perfEntries?.encodedBodySize || null,
-            decodedBodySize: perfEntries?.decodedBodySize || null,
-
-            connectionRTT: navigator.connection?.rtt || null,
-            connectionDownlinkMax: navigator.connection?.downlinkMax || null,
-
-            languages: navigator.languages ? navigator.languages.join(',') : navigator.language,
-            localStorageEnabled: (function () {
-              try { return !!window.localStorage; } catch (e) { return false; }
-            })(),
-            sessionStorageEnabled: (function () {
-              try { return !!window.sessionStorage; } catch (e) { return false; }
-            })(),
-            indexedDBEnabled: !!window.indexedDB,
-            serviceWorkerEnabled: 'serviceWorker' in navigator,
-            webGLSupported: (function () {
-              try {
-                const canvas = document.createElement('canvas');
-                return !!(window.WebGLRenderingContext && (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
-              } catch (e) { return false; }
-            })(),
-            webRTCSupported: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
-            notificationPermission: 'Notification' in window ? Notification.permission : 'not-supported',
-
-            pluginsCount: navigator.plugins ? navigator.plugins.length : 0,
-            mimeTypesCount: navigator.mimeTypes ? navigator.mimeTypes.length : 0,
-            pdfViewerEnabled: navigator.pdfViewerEnabled || false,
-
-            maxTouchPoints: navigator.maxTouchPoints || 0,
-            batteryLevel: null,
-            batteryCharging: null,
-
-            historyLength: window.history.length,
-            isIframe: window.self !== window.top,
-
-            utmSource: utmSource,
-            utmMedium: utmMedium,
-            utmCampaign: utmCampaign,
-            utmTerm: utmTerm,
-            utmContent: utmContent,
-
-            sessionStartTime: sessionStorage.getItem('pd_session_start') || (function () {
-              const start = new Date().toISOString();
-              sessionStorage.setItem('pd_session_start', start);
-              return start;
-            })(),
-            pageViewsInSession: parseInt(sessionStorage.getItem('pd_page_views') || '0') + 1,
-
-            isMobile: /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
-            isTablet: /iPad|Android(?!.*Mobile)/i.test(navigator.userAgent),
-            isDesktop: !/Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
-
-            secureContext: window.isSecureContext || false,
-            crossOriginIsolated: window.crossOriginIsolated || false,
-
-            canvasSupported: !!document.createElement('canvas').getContext,
-            svgSupported: !!document.createElementNS && !!document.createElementNS('http://www.w3.org/2000/svg', 'svg').createSVGRect,
-
-            storageQuota: null,
-            storageUsage: null,
-            storageUsagePercent: null,
-
-            availScreenWidth: screen.availWidth || null,
-            availScreenHeight: screen.availHeight || null,
-
-            displayMode: window.matchMedia('(display-mode: standalone)').matches ? 'standalone'
-              : window.matchMedia('(display-mode: fullscreen)').matches ? 'fullscreen'
-                : window.matchMedia('(display-mode: minimal-ui)').matches ? 'minimal-ui' : 'browser',
-
-            prefersColorScheme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark'
-              : window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'no-preference',
-            prefersReducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-            prefersReducedTransparency: window.matchMedia('(prefers-reduced-transparency: reduce)').matches,
-            prefersContrast: window.matchMedia('(prefers-contrast: high)').matches ? 'high'
-              : window.matchMedia('(prefers-contrast: low)').matches ? 'low' : 'no-preference'
-          };
-
-          sessionStorage.setItem('pd_page_views', visitData.pageViewsInSession.toString());
-
-          const asyncPromises = [];
-
-          if ('getBattery' in navigator) {
-            asyncPromises.push(
-              navigator.getBattery().then((battery) => {
-                visitData.batteryLevel = battery.level;
-                visitData.batteryCharging = battery.charging;
-              }).catch(() => {})
-            );
-          }
-
-          if ('storage' in navigator && 'estimate' in navigator.storage) {
-            asyncPromises.push(
-              navigator.storage.estimate().then((estimate) => {
-                visitData.storageQuota = estimate.quota || null;
-                visitData.storageUsage = estimate.usage || null;
-                visitData.storageUsagePercent = estimate.quota
-                  ? (estimate.usage / estimate.quota * 100).toFixed(2)
-                  : null;
-              }).catch(() => {})
-            );
-          }
-
-          Promise.all(asyncPromises).finally(() => {
-            log('Enviando dados:', visitData);
-            try {
-              fetch(TRACKING_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(visitData),
-                keepalive: true
-              }).catch(() => {
-                log('Tracking enviado (erro ignorado)');
-              });
-            } catch (e) {
-              log('Tracking error (ignorado):', e.message);
-            }
-          });
-        }
-
-        function startTracking() {
-          if (trackingStarted) return;
-          trackingStarted = true;
-          log('Inicializando rastreamento');
-          trackVisit();
-
-          window.addEventListener('hashchange', function () {
-            log('Hash mudou');
-            trackVisit();
-          });
-
-          window.addEventListener('popstate', function () {
-            log('Popstate disparado');
-            setTimeout(() => trackVisit(), 100);
-          });
-
-          const originalPushState = history.pushState;
-          const originalReplaceState = history.replaceState;
-
-          history.pushState = function () {
-            originalPushState.apply(this, arguments);
-            log('PushState interceptado');
-            setTimeout(() => trackVisit(), 100);
-          };
-
-          history.replaceState = function () {
-            originalReplaceState.apply(this, arguments);
-            log('ReplaceState interceptado');
-            setTimeout(() => trackVisit(), 100);
-          };
-        }
-
-        window.__initTrackingPrecosDiarios = startTracking;
-        startTracking();
+            fetch(SCRIPT_URL, {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data)
+            }).then(function() {
+              console.log('[Tracking] Data sent');
+            }).catch(function(err) {
+              console.log('[Tracking] Error:', err);
+            });
+          }, 100);
+        });
       })();
     </script>
     <script type="module" src="/src/main.jsx"></script>

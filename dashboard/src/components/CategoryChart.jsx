@@ -27,6 +27,8 @@ export default function CategoryChart({
   height = 300,
   showPie = false,
   xAxisLabel = 'Preço médio (R$)',
+  onCategoriaClick,
+  selectedCategoria,
 }) {
   const [viewMode, setViewMode] = useState(showPie ? 'pie' : 'bar')
 
@@ -132,6 +134,12 @@ export default function CategoryChart({
         <p className="text-sm text-dark-500 mb-4">{description}</p>
       )}
 
+      {selectedCategoria && (
+        <p className="text-xs text-center text-primary-600 mb-2 font-medium">
+          Categoria selecionada: {formatCategoryName(selectedCategoria)}
+        </p>
+      )}
+
       <ResponsiveContainer width="100%" height={height}>
         {viewMode === 'pie' ? (
           <PieChart>
@@ -144,11 +152,14 @@ export default function CategoryChart({
               outerRadius={height / 3}
               label={renderCustomLabel}
               labelLine={false}
+              onClick={(data) => onCategoriaClick?.(data.rawName)}
+              cursor={onCategoriaClick ? 'pointer' : 'default'}
             >
               {chartData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
                   fill={CHART_COLORS[index % CHART_COLORS.length]}
+                  opacity={selectedCategoria && entry.rawName !== selectedCategoria ? 0.4 : 1}
                 />
               ))}
             </Pie>
@@ -190,17 +201,29 @@ export default function CategoryChart({
               width={75}
             />
             <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="media" radius={[0, 4, 4, 0]}>
+            <Bar
+              dataKey="media"
+              radius={[0, 4, 4, 0]}
+              onClick={(data) => onCategoriaClick?.(data.rawName)}
+              cursor={onCategoriaClick ? 'pointer' : 'default'}
+            >
               {chartData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
                   fill={CHART_COLORS[index % CHART_COLORS.length]}
+                  opacity={selectedCategoria && entry.rawName !== selectedCategoria ? 0.4 : 1}
                 />
               ))}
             </Bar>
           </BarChart>
         )}
       </ResponsiveContainer>
+
+      {onCategoriaClick && (
+        <p className="text-xs text-center text-dark-400 mt-2">
+          Clique para filtrar por categoria
+        </p>
+      )}
     </div>
   )
 }

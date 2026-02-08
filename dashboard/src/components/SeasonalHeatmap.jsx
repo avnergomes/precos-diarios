@@ -16,6 +16,9 @@ export default function SeasonalHeatmap({
   title = 'Sazonalidade de Preços',
   description,
   height = 350,
+  onCellClick,
+  selectedMonth,
+  selectedYear,
 }) {
   // Process data into month x year matrix with per-year min/max
   const { matrix, years, yearStats, globalMin, globalMax } = useMemo(() => {
@@ -176,6 +179,7 @@ export default function SeasonalHeatmap({
                   const value = matrix[month]?.[year]
                   const hasData = value && value > 0
                   const stats = yearStats[year]
+                  const isSelected = selectedMonth === month && selectedYear === year
 
                   return (
                     <div
@@ -186,11 +190,15 @@ export default function SeasonalHeatmap({
                         height: cellHeight,
                         padding: 1,
                       }}
+                      onClick={() => hasData && onCellClick?.({ mes: month, ano: year })}
                     >
                       <div
-                        className="w-full h-full rounded transition-all duration-200 hover:ring-2 hover:ring-primary-400 hover:ring-offset-1"
+                        className={`w-full h-full rounded transition-all duration-200 hover:ring-2 hover:ring-primary-400 hover:ring-offset-1 ${
+                          onCellClick && hasData ? 'cursor-pointer' : ''
+                        } ${isSelected ? 'ring-2 ring-primary-600 ring-offset-1' : ''}`}
                         style={{
                           backgroundColor: getColor(value, year),
+                          opacity: (selectedMonth && selectedYear && !isSelected) ? 0.5 : 1,
                         }}
                       />
 
@@ -242,6 +250,18 @@ export default function SeasonalHeatmap({
       <div className="mt-2 text-center text-xs text-dark-400">
         Cores normalizadas por ano - destaca sazonalidade dentro de cada ano
       </div>
+
+      {selectedMonth && selectedYear && (
+        <p className="text-xs text-center text-primary-600 mt-2 font-medium">
+          Selecionado: {MONTHS[selectedMonth - 1]} {selectedYear}
+        </p>
+      )}
+
+      {onCellClick && !selectedMonth && (
+        <p className="text-xs text-center text-dark-400 mt-2">
+          Clique em uma célula para filtrar por mês/ano
+        </p>
+      )}
     </div>
   )
 }
