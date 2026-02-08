@@ -44,3 +44,6 @@ npm-debug.log*
 # Temporary
 *.tmp
 *.temp
+
+# Google Apps Script (secrets)
+*.gs
