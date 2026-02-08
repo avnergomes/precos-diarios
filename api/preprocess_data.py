@@ -175,6 +175,84 @@ def generate_filter_maps(df: pd.DataFrame) -> dict:
     return maps
 
 
+def generate_daily_series(df: pd.DataFrame) -> dict:
+    """Generate daily price series for top products (for volatility analysis)."""
+    logger.info("Generating daily series...")
+    daily = {}
+
+    # Get top 20 products by record count
+    top_products = df['produto'].value_counts().head(20).index.tolist()
+
+    for produto in top_products:
+        prod_df = df[df['produto'] == produto].copy()
+        prod_df = prod_df[prod_df['data'].notna()].sort_values('data')
+
+        if len(prod_df) > 0:
+            daily[produto] = [
+                {'d': str(row['data']), 'p': round(float(row['preco_medio']), 2)}
+                for _, row in prod_df.iterrows()
+            ]
+
+    return {'products': daily, 'generated_at': datetime.now().isoformat()}
+
+
+def generate_volatility(df: pd.DataFrame) -> dict:
+    """Generate volatility metrics by product and period."""
+    logger.info("Generating volatility metrics...")
+    vol = {}
+
+    # Filter to products with enough data
+    product_counts = df.groupby('produto').size()
+    valid_products = product_counts[product_counts >= 10].index.tolist()
+    df_valid = df[df['produto'].isin(valid_products)]
+
+    for (prod, periodo), grp in df_valid.groupby(['produto', 'periodo']):
+        if len(grp) >= 3:  # Minimum 3 observations for volatility
+            prices = grp['preco_medio'].values
+            mean_price = float(np.mean(prices))
+            std_price = float(np.std(prices))
+
+            if mean_price > 0:
+                vol.setdefault(prod, {})[periodo] = {
+                    'std': round(std_price, 2),
+                    'cv': round(std_price / mean_price * 100, 1),  # Coefficient of variation %
+                    'range_pct': round((prices.max() - prices.min()) / mean_price * 100, 1),
+                    'n': len(grp),
+                }
+
+    return {'by_product': vol, 'generated_at': datetime.now().isoformat()}
+
+
+def generate_regional_spread(df: pd.DataFrame) -> dict:
+    """Generate regional spread using min/max prices as proxy."""
+    logger.info("Generating regional spread...")
+    spread = {}
+
+    # Check if min/max columns exist
+    if 'preco_minimo' not in df.columns or 'preco_maximo' not in df.columns:
+        logger.warning("preco_minimo/preco_maximo columns not found, skipping spread calculation")
+        return {'by_product': {}, 'generated_at': datetime.now().isoformat()}
+
+    # Filter rows with valid min/max
+    df_valid = df[df['preco_minimo'].notna() & df['preco_maximo'].notna()].copy()
+
+    for (prod, periodo), grp in df_valid.groupby(['produto', 'periodo']):
+        if len(grp) >= 1:
+            pmin = float(grp['preco_minimo'].mean())
+            pmax = float(grp['preco_maximo'].mean())
+            pmean = float(grp['preco_medio'].mean())
+
+            if pmean > 0 and pmax >= pmin:
+                spread.setdefault(prod, {})[periodo] = {
+                    'spread_pct': round((pmax - pmin) / pmean * 100, 1),
+                    'min': round(pmin, 2),
+                    'max': round(pmax, 2),
+                    'mean': round(pmean, 2),
+                }
+
+    return {'by_product': spread, 'generated_at': datetime.now().isoformat()}
+
+
 def save_json(data: dict, filename: str):
     """Save JSON file."""
     filepath = JSON_DIR / filename
@@ -192,10 +270,17 @@ def main():
         return
 
     df = load_data()
+
+    # Original JSON files
     save_json(generate_aggregated_data(df), 'aggregated.json')
     save_json(generate_detailed_data(df), 'detailed.json')
     save_json(generate_time_series(df), 'timeseries.json')
     save_json(generate_filter_maps(df), 'filters.json')
+
+    # New JSON files for enhanced analytics
+    save_json(generate_daily_series(df), 'daily_series.json')
+    save_json(generate_volatility(df), 'volatility.json')
+    save_json(generate_regional_spread(df), 'regional_spread.json')
 
     logger.info("Preprocessing complete!")
 

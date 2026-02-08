@@ -17,6 +17,8 @@ export default function ProductTable({
   searchable = false,
   showSparkline = false,
   sparklineData = {},
+  onProdutoClick,
+  selectedProduto,
 }) {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('registros')
@@ -248,7 +250,13 @@ export default function ProductTable({
               const trend = getTrend(item.produto)
 
               return (
-              <tr key={item.produto} className="table-row">
+              <tr
+                key={item.produto}
+                onClick={() => onProdutoClick?.(item.produto)}
+                className={`table-row ${onProdutoClick ? 'cursor-pointer hover:bg-primary-50' : ''} ${
+                  selectedProduto === item.produto ? 'bg-primary-100 ring-1 ring-primary-400' : ''
+                }`}
+              >
                 <td className="px-3 py-3">
                   <span
                     className={`inline-flex items-center justify-center gap-1 w-10 h-7 rounded-full text-xs font-bold ${getRankBadge(item.rank)}`}
@@ -330,6 +338,16 @@ export default function ProductTable({
       {/* Footer */}
       <div className="mt-4 pt-4 border-t border-dark-100 text-sm text-dark-500 text-center">
         Exibindo {filteredData.length} primeiros de {normalizedData.length} produtos
+        {selectedProduto && (
+          <span className="block text-primary-600 font-medium mt-1">
+            Produto selecionado: {selectedProduto}
+          </span>
+        )}
+        {onProdutoClick && !selectedProduto && (
+          <span className="block text-dark-400 text-xs mt-1">
+            Clique em um produto para filtrar
+          </span>
+        )}
       </div>
     </div>
   )

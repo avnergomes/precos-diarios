@@ -19,6 +19,8 @@ export default function TimeSeriesChart({
   showMinMax = false,
   color = '#f59e0b',
   yAxisLabel = 'Preço médio (R$)',
+  onPeriodClick,
+  selectedPeriod,
 }) {
   if (!data || Object.keys(data).length === 0) {
     return (
@@ -80,7 +82,16 @@ export default function TimeSeriesChart({
 
       <ResponsiveContainer width="100%" height={height}>
         {showMinMax ? (
-          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <AreaChart
+            data={chartData}
+            margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+            onClick={(event) => {
+              if (event?.activePayload?.[0]?.payload && onPeriodClick) {
+                onPeriodClick(event.activePayload[0].payload)
+              }
+            }}
+            style={{ cursor: onPeriodClick ? 'pointer' : 'default' }}
+          >
             <defs>
               <linearGradient id="colorMedia" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor={color} stopOpacity={0.3} />
@@ -139,7 +150,16 @@ export default function TimeSeriesChart({
             />
           </AreaChart>
         ) : (
-          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <AreaChart
+            data={chartData}
+            margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+            onClick={(event) => {
+              if (event?.activePayload?.[0]?.payload && onPeriodClick) {
+                onPeriodClick(event.activePayload[0].payload)
+              }
+            }}
+            style={{ cursor: onPeriodClick ? 'pointer' : 'default' }}
+          >
             <defs>
               <linearGradient id="colorMedia2" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor={color} stopOpacity={0.3} />
@@ -180,6 +200,18 @@ export default function TimeSeriesChart({
           </AreaChart>
         )}
       </ResponsiveContainer>
+
+      {selectedPeriod && (
+        <p className="text-xs text-center text-primary-600 mt-2 font-medium">
+          Período selecionado: {formatPeriod(selectedPeriod)}
+        </p>
+      )}
+
+      {onPeriodClick && !selectedPeriod && (
+        <p className="text-xs text-center text-dark-400 mt-2">
+          Clique no gráfico para filtrar por período
+        </p>
+      )}
     </div>
   )
 }
