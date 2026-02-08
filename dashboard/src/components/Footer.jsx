@@ -74,6 +74,14 @@ export default function Footer({ metadata }) {
               >
                 ComexStat Paraná
               </a>
+              <a
+                href="https://avnergomes.github.io/emprego-agro-parana/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center px-2.5 py-1 text-[10px] rounded-full border border-dark-200 text-dark-600 hover:text-primary-600 hover:border-primary-300 transition-colors"
+              >
+                Emprego Agro
+              </a>
             </div>
           </div>
 
