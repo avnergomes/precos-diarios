@@ -86,4 +86,4 @@ jobs:
           Scraping + ETL + previsões executados automaticamente.
           EOF
           )"
-          git push
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
