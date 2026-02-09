@@ -5,7 +5,7 @@ services:
     runtime: python
     region: oregon
     plan: free
-    repo: https://github.com/avfranco/precos-diarios
+    repo: https://github.com/avnergomes/precos-diarios
     buildCommand: |
       pip install -r requirements.txt
       python -c "from api.scraper import scrape_latest_quotations; scrape_latest_quotations()" || true
