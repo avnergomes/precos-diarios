@@ -168,9 +168,14 @@ def get_data(filename):
 
 @app.route('/api/refresh', methods=['POST'])
 def refresh_data():
-    """Trigger a data refresh (protected in production)."""
-    # In production, add authentication here
+    """Trigger a data refresh (protected by API key)."""
     api_key = os.environ.get('REFRESH_API_KEY')
+    provided_key = request.headers.get('X-API-Key')
+    if not provided_key and request.is_json:
+        provided_key = request.json.get('api_key')
+
+    if not api_key or provided_key != api_key:
+        return jsonify({'error': 'Unauthorized', 'message': 'Valid API key required'}), 401
 
     try:
         run_pipeline()
@@ -348,4 +353,4 @@ if __name__ == '__main__':
         run_pipeline()
 
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=os.environ.get('FLASK_ENV') != 'production')
+    app.run(host='0.0.0.0', port=port, debug=False)
