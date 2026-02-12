@@ -15,8 +15,12 @@ import ForecastTable from './components/ForecastTable'
 import Footer from './components/Footer'
 import Loading from './components/Loading'
 import SectionNav from './components/SectionNav'
+// Advanced D3 Charts
+import LollipopChart from './components/LollipopChart'
+import CircularBarChart from './components/CircularBarChart'
+import RidgelineChart from './components/RidgelineChart'
 import { formatCategoryName } from './utils/format'
-import { TrendingUp, BarChart3, Package, LineChart } from 'lucide-react'
+import { TrendingUp, BarChart3, Package, LineChart, Radar } from 'lucide-react'
 
 function App() {
   const { data, loading, error } = useData()
@@ -157,8 +161,24 @@ function App() {
           <SeasonalHeatmap
             data={filteredData}
             title="Sazonalidade (meses x anos)"
-            description="Intensidade de preços por mês e ano."
+            description="Intensidade de precos por mes e ano."
           />
+
+          {/* Advanced D3 Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <CircularBarChart
+              data={data?.timeseries?.by_period}
+              title="Padrao Sazonal (Radial)"
+              width={380}
+              height={380}
+            />
+            <RidgelineChart
+              data={data?.timeseries?.by_period}
+              title="Distribuicao de Precos por Ano"
+              width={500}
+              height={400}
+            />
+          </div>
         </section>
 
         {/* Categories Section */}
@@ -252,9 +272,17 @@ function App() {
             </div>
             <div>
               <h2 className="text-xl font-semibold text-dark-800">Produtos</h2>
-              <p className="text-sm text-dark-500">Ranking com preço médio, variação e tendência</p>
+              <p className="text-sm text-dark-500">Ranking com preco medio, variacao e tendencia</p>
             </div>
           </div>
+
+          {/* Lollipop Chart - Top Products by Price */}
+          <LollipopChart
+            data={aggregations?.topProducts}
+            title="Top 15 Produtos por Preco Medio"
+            width={700}
+            height={500}
+          />
 
           <ProductTable
             data={aggregations?.topProducts}
