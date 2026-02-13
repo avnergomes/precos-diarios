@@ -167,13 +167,13 @@ function App() {
           {/* Advanced D3 Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <CircularBarChart
-              data={data?.timeseries?.by_period}
+              data={filteredTimeSeries}
               title="Padrao Sazonal (Radial)"
               width={380}
               height={380}
             />
             <RidgelineChart
-              data={data?.timeseries?.by_period}
+              data={filteredTimeSeries}
               title="Distribuicao de Precos por Ano"
               width={500}
               height={400}
