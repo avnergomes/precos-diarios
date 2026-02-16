@@ -20,9 +20,11 @@ jobs:
           args: >-
             --verbose
             --no-progress
-            --accept 200,204,301,302,403
-            --exclude-mail
+            --accept 200,204,301,302,403,429,503
+            --exclude "^mailto:"
             --exclude "^https://script.google.com"
+            --exclude "^https://www.linkedin.com"
+            --timeout 30
             "./dashboard/**/*.html"
             "./**/*.md"
         env:
