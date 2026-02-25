@@ -3,6 +3,7 @@
 """
 Data Preprocessing for Dashboard API
 Generates optimized JSON files for the React dashboard.
+Supports both aggregated and regional granularity data.
 """
 
 import json
@@ -21,6 +22,16 @@ DATA_DIR = BASE_DIR / "data"
 DATA_PROCESSED_DIR = DATA_DIR / "processed"
 JSON_DIR = DATA_DIR / "json"
 INPUT_FILE = DATA_PROCESSED_DIR / "consolidated.csv"
+INPUT_FILE_REGIONAL = DATA_PROCESSED_DIR / "consolidated_regional.csv"
+
+# Lista de regionais padrão do IDR-Paraná
+REGIONAIS_PADRAO = [
+    'Apucarana', 'Campo Mourão', 'Cascavel', 'Cianorte', 'Cornélio Procópio',
+    'Curitiba', 'Dois Vizinhos', 'Francisco Beltrão', 'Guarapuava', 'Irati',
+    'Ivaiporã', 'Laranjeiras do Sul', 'Londrina', 'Maringá', 'Paranaguá',
+    'Paranavaí', 'Pato Branco', 'Pitanga', 'Ponta Grossa',
+    'Santo Antônio da Platina', 'Toledo', 'Umuarama', 'União da Vitória'
+]
 
 
 def fix_encoding(text):
@@ -41,27 +52,55 @@ def fix_encoding(text):
     return text
 
 
-def load_data() -> pd.DataFrame:
-    """Load consolidated data."""
-    logger.info("Loading data...")
+def load_data(regional: bool = False) -> pd.DataFrame:
+    """Load consolidated data.
+
+    Args:
+        regional: If True, load regional data; if False, load aggregated data
+    """
+    input_file = INPUT_FILE_REGIONAL if regional else INPUT_FILE
+    logger.info(f"Loading {'regional' if regional else 'aggregated'} data from {input_file}...")
+
+    if not input_file.exists():
+        logger.warning(f"File not found: {input_file}")
+        if regional:
+            logger.info("Falling back to aggregated data")
+            return load_data(regional=False)
+        return pd.DataFrame()
 
     # Try multiple encodings
+    df = None
     for encoding in ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']:
         try:
-            df = pd.read_csv(INPUT_FILE, encoding=encoding)
+            df = pd.read_csv(input_file, encoding=encoding)
             break
         except Exception:
             continue
 
+    if df is None or df.empty:
+        logger.error(f"Failed to load data from {input_file}")
+        return pd.DataFrame()
+
     df['ano'] = pd.to_numeric(df['ano'], errors='coerce')
     df['mes'] = pd.to_numeric(df['mes'], errors='coerce')
-    df['preco_medio'] = pd.to_numeric(df['preco_medio'], errors='coerce')
 
-    df = df[df['preco_medio'].notna() & (df['preco_medio'] > 0)]
+    # Handle different column names for price
+    price_col = 'preco' if 'preco' in df.columns else 'preco_medio'
+    df[price_col] = pd.to_numeric(df[price_col], errors='coerce')
+
+    df = df[df[price_col].notna() & (df[price_col] > 0)]
     df = df[df['ano'].notna()]
+
+    # Normalize price column name
+    if price_col == 'preco' and 'preco_medio' not in df.columns:
+        df['preco_medio'] = df['preco']
 
     # Fix encoding in product names
     df['produto'] = df['produto'].apply(fix_encoding)
+
+    # Fix encoding in regional names if present
+    if 'regional' in df.columns:
+        df['regional'] = df['regional'].apply(fix_encoding)
 
     # Fix category inconsistencies - use most common category for each product
     product_main_category = df.groupby('produto')['categoria'].agg(
@@ -253,6 +292,207 @@ def generate_regional_spread(df: pd.DataFrame) -> dict:
     return {'by_product': spread, 'generated_at': datetime.now().isoformat()}
 
 
+# ============================================================================
+# REGIONAL DATA FUNCTIONS
+# ============================================================================
+
+def generate_regional_prices(df: pd.DataFrame) -> dict:
+    """Generate price data by regional, product, and period."""
+    logger.info("Generating regional prices...")
+
+    if 'regional' not in df.columns:
+        logger.warning("No regional column found - skipping regional prices")
+        return {'by_regional': {}, 'generated_at': datetime.now().isoformat()}
+
+    prices = {'by_regional': {}, 'by_product_regional': {}}
+
+    # Group by regional
+    for regional, grp in df.groupby('regional'):
+        prices['by_regional'][regional] = {
+            'total_records': len(grp),
+            'avg_price': round(float(grp['preco_medio'].mean()), 2),
+            'products': grp['produto'].nunique(),
+            'year_min': int(grp['ano'].min()),
+            'year_max': int(grp['ano'].max()),
+        }
+
+    # Group by product and regional (time series)
+    for (produto, regional), grp in df.groupby(['produto', 'regional']):
+        grp_sorted = grp.sort_values('periodo')
+        series = []
+        for periodo, pg in grp_sorted.groupby('periodo'):
+            series.append({
+                'p': periodo,
+                'v': round(float(pg['preco_medio'].mean()), 2),
+                'n': len(pg),
+            })
+
+        prices['by_product_regional'].setdefault(produto, {})[regional] = series
+
+    prices['generated_at'] = datetime.now().isoformat()
+    return prices
+
+
+def generate_regional_comparison(df: pd.DataFrame) -> dict:
+    """Generate cross-regional comparison data for products."""
+    logger.info("Generating regional comparison...")
+
+    if 'regional' not in df.columns:
+        logger.warning("No regional column found - skipping regional comparison")
+        return {'comparisons': {}, 'generated_at': datetime.now().isoformat()}
+
+    comparisons = {}
+
+    # For each product, compare prices across regions
+    for produto, prod_df in df.groupby('produto'):
+        regional_stats = {}
+        for regional, grp in prod_df.groupby('regional'):
+            prices = grp['preco_medio'].values
+            regional_stats[regional] = {
+                'mean': round(float(np.mean(prices)), 2),
+                'min': round(float(np.min(prices)), 2),
+                'max': round(float(np.max(prices)), 2),
+                'std': round(float(np.std(prices)), 2) if len(prices) > 1 else 0,
+                'count': len(prices),
+            }
+
+        if len(regional_stats) >= 2:  # Only include if we have multiple regions
+            all_means = [s['mean'] for s in regional_stats.values()]
+            comparisons[produto] = {
+                'regions': regional_stats,
+                'spread': round(max(all_means) - min(all_means), 2),
+                'spread_pct': round((max(all_means) - min(all_means)) / np.mean(all_means) * 100, 1) if np.mean(all_means) > 0 else 0,
+                'cheapest': min(regional_stats.items(), key=lambda x: x[1]['mean'])[0],
+                'most_expensive': max(regional_stats.items(), key=lambda x: x[1]['mean'])[0],
+            }
+
+    return {'comparisons': comparisons, 'generated_at': datetime.now().isoformat()}
+
+
+def generate_regional_filters(df: pd.DataFrame) -> dict:
+    """Generate regional filter data."""
+    logger.info("Generating regional filters...")
+
+    filters = {
+        'regionais': REGIONAIS_PADRAO,
+        'regionais_com_dados': [],
+        'regional_products': {},
+        'regional_categories': {},
+        'regional_anos': {},
+    }
+
+    if 'regional' not in df.columns:
+        logger.warning("No regional column found - returning empty regional filters")
+        return filters
+
+    filters['regionais_com_dados'] = sorted(df['regional'].dropna().unique().tolist())
+
+    # Products available in each regional
+    for regional, grp in df.groupby('regional'):
+        filters['regional_products'][regional] = sorted(grp['produto'].unique().tolist())
+        filters['regional_categories'][regional] = sorted(grp['categoria'].unique().tolist())
+        filters['regional_anos'][regional] = sorted([int(x) for x in grp['ano'].unique()])
+
+    return filters
+
+
+def generate_regional_timeseries(df: pd.DataFrame) -> dict:
+    """Generate time series data with regional breakdown."""
+    logger.info("Generating regional timeseries...")
+
+    if 'regional' not in df.columns:
+        logger.warning("No regional column found - skipping regional timeseries")
+        return {'series': {}, 'generated_at': datetime.now().isoformat()}
+
+    series = {'by_regional': {}, 'by_period': {}}
+
+    # Time series for each regional
+    for regional, grp in df.groupby('regional'):
+        regional_series = {}
+        for periodo, pg in grp.groupby('periodo'):
+            regional_series[periodo] = {
+                'mean': round(float(pg['preco_medio'].mean()), 2),
+                'count': len(pg),
+            }
+        series['by_regional'][regional] = regional_series
+
+    # Aggregated by period with regional breakdown
+    for periodo, grp in df.groupby('periodo'):
+        period_data = {'total': round(float(grp['preco_medio'].mean()), 2)}
+        for regional, rg in grp.groupby('regional'):
+            period_data[regional] = round(float(rg['preco_medio'].mean()), 2)
+        series['by_period'][periodo] = period_data
+
+    series['generated_at'] = datetime.now().isoformat()
+    return series
+
+
+def generate_detailed_regional_data(df: pd.DataFrame) -> dict:
+    """Generate detailed records with regional information."""
+    logger.info("Generating detailed regional data...")
+
+    if 'regional' not in df.columns:
+        logger.warning("No regional column found - skipping detailed regional data")
+        return {'records': [], 'generated_at': datetime.now().isoformat()}
+
+    # Sample for large datasets
+    sample_df = df.sample(n=min(100000, len(df)), random_state=42) if len(df) > 100000 else df
+
+    records = []
+    for _, row in sample_df.iterrows():
+        records.append({
+            'd': row.get('data', ''),
+            'a': int(row['ano']) if pd.notna(row['ano']) else None,
+            'p': row.get('produto', ''),
+            'c': row.get('categoria', ''),
+            'r': row.get('regional', ''),
+            'u': row.get('unidade', ''),
+            'v': round(float(row['preco_medio']), 2),
+        })
+
+    return {
+        'records': records,
+        'filters': {
+            'anos': sorted([int(x) for x in df['ano'].dropna().unique()]),
+            'categorias': sorted(df['categoria'].dropna().unique().tolist()),
+            'produtos': sorted(df['produto'].dropna().unique().tolist())[:500],
+            'regionais': sorted(df['regional'].dropna().unique().tolist()),
+        },
+        'generated_at': datetime.now().isoformat(),
+    }
+
+
+def generate_regional_statistics(df: pd.DataFrame) -> dict:
+    """Generate aggregate statistics by regional."""
+    logger.info("Generating regional statistics...")
+
+    if 'regional' not in df.columns:
+        logger.warning("No regional column found - skipping regional statistics")
+        return {'stats': {}, 'generated_at': datetime.now().isoformat()}
+
+    stats = {}
+
+    for regional, grp in df.groupby('regional'):
+        prices = grp['preco_medio'].values
+        stats[regional] = {
+            'total_records': len(grp),
+            'total_products': grp['produto'].nunique(),
+            'total_categories': grp['categoria'].nunique(),
+            'year_range': [int(grp['ano'].min()), int(grp['ano'].max())],
+            'price_stats': {
+                'mean': round(float(np.mean(prices)), 2),
+                'median': round(float(np.median(prices)), 2),
+                'std': round(float(np.std(prices)), 2),
+                'min': round(float(np.min(prices)), 2),
+                'max': round(float(np.max(prices)), 2),
+            },
+            'top_products': grp['produto'].value_counts().head(10).to_dict(),
+            'categories': grp['categoria'].value_counts().to_dict(),
+        }
+
+    return {'stats': stats, 'generated_at': datetime.now().isoformat()}
+
+
 def save_json(data: dict, filename: str):
     """Save JSON file."""
     filepath = JSON_DIR / filename
@@ -265,22 +505,42 @@ def main():
     """Main preprocessing pipeline."""
     JSON_DIR.mkdir(parents=True, exist_ok=True)
 
-    if not INPUT_FILE.exists():
-        logger.error(f"Input file not found: {INPUT_FILE}")
+    # Check for at least one input file
+    if not INPUT_FILE.exists() and not INPUT_FILE_REGIONAL.exists():
+        logger.error(f"No input files found: {INPUT_FILE} or {INPUT_FILE_REGIONAL}")
         return
 
-    df = load_data()
+    # Load aggregated data
+    df_agg = load_data(regional=False)
 
-    # Original JSON files
-    save_json(generate_aggregated_data(df), 'aggregated.json')
-    save_json(generate_detailed_data(df), 'detailed.json')
-    save_json(generate_time_series(df), 'timeseries.json')
-    save_json(generate_filter_maps(df), 'filters.json')
+    if not df_agg.empty:
+        # Original JSON files (from aggregated data)
+        save_json(generate_aggregated_data(df_agg), 'aggregated.json')
+        save_json(generate_detailed_data(df_agg), 'detailed.json')
+        save_json(generate_time_series(df_agg), 'timeseries.json')
+        save_json(generate_filter_maps(df_agg), 'filters.json')
 
-    # New JSON files for enhanced analytics
-    save_json(generate_daily_series(df), 'daily_series.json')
-    save_json(generate_volatility(df), 'volatility.json')
-    save_json(generate_regional_spread(df), 'regional_spread.json')
+        # Analytics JSON files
+        save_json(generate_daily_series(df_agg), 'daily_series.json')
+        save_json(generate_volatility(df_agg), 'volatility.json')
+        save_json(generate_regional_spread(df_agg), 'regional_spread.json')
+
+    # Load regional data if available
+    if INPUT_FILE_REGIONAL.exists():
+        df_regional = load_data(regional=True)
+
+        if not df_regional.empty:
+            # Regional JSON files
+            save_json(generate_regional_prices(df_regional), 'regional_prices.json')
+            save_json(generate_regional_comparison(df_regional), 'regional_comparison.json')
+            save_json(generate_regional_filters(df_regional), 'regional_filters.json')
+            save_json(generate_regional_timeseries(df_regional), 'regional_timeseries.json')
+            save_json(generate_detailed_regional_data(df_regional), 'detailed_regional.json')
+            save_json(generate_regional_statistics(df_regional), 'regional_statistics.json')
+
+            logger.info(f"Generated regional JSONs with {len(df_regional)} records from {df_regional['regional'].nunique()} regions")
+    else:
+        logger.info("No regional data file found - skipping regional JSONs")
 
     logger.info("Preprocessing complete!")
 
