@@ -85,8 +85,9 @@ export function generateSparklineData(records, productName, limit = 12) {
   if (!records || !productName) return []
 
   // Filter records for this product and sort by date
+  const getPrice = (r) => r.pm ?? r.v ?? 0
   const productRecords = records
-    .filter(r => r.p === productName && r.pm > 0)
+    .filter(r => r.p === productName && getPrice(r) > 0)
     .sort((a, b) => {
       // Sort by year and month
       if (a.a !== b.a) return a.a - b.a
@@ -100,7 +101,7 @@ export function generateSparklineData(records, productName, limit = 12) {
     if (!monthlyData[key]) {
       monthlyData[key] = { sum: 0, count: 0 }
     }
-    monthlyData[key].sum += r.pm
+    monthlyData[key].sum += getPrice(r)
     monthlyData[key].count++
   })
 

@@ -32,7 +32,7 @@ export default function SeasonalHeatmap({
     data.forEach(record => {
       const year = record.a || record.ano
       const month = getRecordMonth(record)
-      const price = record.pm || record.preco_medio
+      const price = record.pm ?? record.v ?? record.preco_medio
 
       if (!year || !price || price <= 0) return
 

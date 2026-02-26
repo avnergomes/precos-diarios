@@ -36,7 +36,7 @@ export default function LatestPrices({ records }) {
         produto: r.p || '',
         categoria: r.c || '',
         unidade: r.u || null,
-        preco: r.pm || 0,
+        preco: r.pm ?? r.v ?? 0,
       }))
 
     if (search) {
