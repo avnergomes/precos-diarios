@@ -1,7 +1,7 @@
-import { Wheat, Calendar, Package, MapPin, Clock } from 'lucide-react'
+import { Wheat, Calendar, Package, MapPin, Clock, Key } from 'lucide-react'
 import { formatNumber, formatDateTime } from '../utils/format'
 
-export default function Header({ metadata, productCount }) {
+export default function Header({ metadata, productCount, onOpenApiModal }) {
   const yearRange = metadata
     ? `${metadata.year_min} - ${metadata.year_max}`
     : '...'
@@ -33,6 +33,15 @@ export default function Header({ metadata, productCount }) {
           <rect width="100" height="100" fill="url(#grain-pattern)" />
         </svg>
       </div>
+
+      {/* API Button */}
+      <button
+        onClick={onOpenApiModal}
+        className="absolute top-4 right-4 z-10 flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg backdrop-blur-sm transition-colors"
+      >
+        <Key className="w-4 h-4" />
+        <span className="font-medium text-sm">API</span>
+      </button>
 
       {/* Content */}
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16">

@@ -2,6 +2,7 @@ import { useMemo, useState, useCallback } from 'react'
 import { useData, useFilteredData, useAggregations, useFilteredTimeSeries } from './hooks/useData'
 import { useForecast, useForecastProducts } from './hooks/useForecast'
 import Header from './components/Header'
+import ApiModal from './components/ApiModal'
 import Filters from './components/Filters'
 import KpiCards from './components/KpiCards'
 import TimeSeriesChart from './components/TimeSeriesChart'
@@ -31,6 +32,9 @@ function App() {
     produto: null,
     regional: null,
   })
+
+  // API Modal state
+  const [isApiModalOpen, setIsApiModalOpen] = useState(false)
 
   // Forecast state
   const [forecastSlug, setForecastSlug] = useState(null)
@@ -110,7 +114,14 @@ function App() {
 
   return (
     <div className="min-h-screen">
-      <Header metadata={metadata} productCount={productCount} />
+      <Header metadata={metadata} productCount={productCount} onOpenApiModal={() => setIsApiModalOpen(true)} />
+
+      {/* API Registration Modal */}
+      <ApiModal
+        isOpen={isApiModalOpen}
+        onClose={() => setIsApiModalOpen(false)}
+        appsScriptUrl={import.meta.env.VITE_APPS_SCRIPT_URL}
+      />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Filters */}

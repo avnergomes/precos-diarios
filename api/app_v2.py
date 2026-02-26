@@ -33,6 +33,7 @@ from flask import Flask, jsonify, request, send_from_directory, g
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
 import pandas as pd
+import requests as http_requests
 
 # Configure logging
 logging.basicConfig(
@@ -77,6 +78,18 @@ API_KEYS = {
         'daily_limit': 10000
     },
 }
+
+# Tier limits configuration for external keys
+TIER_LIMITS = {
+    'free': {'rpm': 10, 'daily': 100},
+    'basic': {'rpm': 60, 'daily': 1000},
+    'pro': {'rpm': 300, 'daily': 10000}
+}
+
+# External keys cache (from Google Sheets)
+_external_keys_cache = {}
+_external_keys_timestamp = None
+EXTERNAL_KEYS_TTL = 300  # 5 minutes
 
 # Cache for loaded data
 _data_cache = {}
@@ -127,6 +140,55 @@ def load_consolidated_data(regional: bool = True) -> pd.DataFrame:
     return pd.DataFrame()
 
 
+def load_external_keys():
+    """Load API keys from Google Sheets via Apps Script."""
+    global _external_keys_cache, _external_keys_timestamp
+
+    url = os.environ.get('APPS_SCRIPT_URL')
+    secret = os.environ.get('APPS_SCRIPT_SECRET')
+
+    if not url or not secret:
+        return {}
+
+    try:
+        response = http_requests.get(f"{url}?secret={secret}", timeout=10)
+        if response.status_code != 200:
+            logger.warning(f"Apps Script returned status {response.status_code}")
+            return {}
+
+        data = response.json()
+        keys = {}
+        for k in data.get('keys', []):
+            tier = k.get('tier', 'free')
+            limits = TIER_LIMITS.get(tier, TIER_LIMITS['free'])
+            keys[k['api_key']] = {
+                'name': k.get('name', 'Unknown'),
+                'tier': tier,
+                'rpm': limits['rpm'],
+                'daily_limit': limits['daily']
+            }
+        logger.info(f"Loaded {len(keys)} external API keys from Google Sheets")
+        return keys
+    except Exception as e:
+        logger.error(f"Error loading external keys: {e}")
+        return {}
+
+
+def get_all_api_keys():
+    """Get all valid API keys (local + external from Google Sheets)."""
+    global _external_keys_cache, _external_keys_timestamp
+
+    now = time.time()
+
+    # Refresh external keys if cache expired
+    if _external_keys_timestamp is None or (now - _external_keys_timestamp) > EXTERNAL_KEYS_TTL:
+        _external_keys_cache = load_external_keys()
+        _external_keys_timestamp = now
+
+    # Merge local and external keys (local takes precedence)
+    return {**_external_keys_cache, **API_KEYS}
+
+
 def require_api_key(f):
     """Decorator to require API key for commercial endpoints."""
     @functools.wraps(f)
@@ -139,7 +201,9 @@ def require_api_key(f):
                 'message': 'Provide API key via X-API-Key header or api_key query param'
             }), 401
 
-        if api_key not in API_KEYS:
+        all_keys = get_all_api_keys()
+
+        if api_key not in all_keys:
             return jsonify({
                 'error': 'Invalid API key',
                 'message': 'The provided API key is not valid'
@@ -147,7 +211,7 @@ def require_api_key(f):
 
         # Store key info in request context
         g.api_key = api_key
-        g.api_info = API_KEYS[api_key]
+        g.api_info = all_keys[api_key]
 
         # Rate limiting
         key_requests = rate_limit_storage[api_key]
