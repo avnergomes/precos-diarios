@@ -151,7 +151,7 @@ def load_external_keys():
         return {}
 
     try:
-        response = http_requests.get(f"{url}?secret={secret}", timeout=10)
+        response = http_requests.get(f"{url}?action=list&secret={secret}", timeout=10)
         if response.status_code != 200:
             logger.warning(f"Apps Script returned status {response.status_code}")
             return {}
