@@ -47,3 +47,7 @@ npm-debug.log*
 
 # Google Apps Script (secrets)
 *.gs
+
+# Docs folder (contains scripts and deployment info)
+docs/
+!docs/README.md
