@@ -1,15 +1,18 @@
 import { useState } from 'react'
-import { Filter, RotateCcw, Search, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { Filter, RotateCcw, Search, X, ChevronDown, ChevronUp, MapPin } from 'lucide-react'
 import { formatCategoryName } from '../utils/format'
 
-export default function Filters({ filters, setFilters, options, metadata }) {
+export default function Filters({ filters, setFilters, options, metadata, hasRegionalData }) {
   const anos = options?.anos || []
   const categorias = options?.categorias || []
   const produtos = options?.produtos || []
+  const regionais = options?.regionais || []
   const categoryProducts = options?.category_products || {}
+  const regionalProducts = options?.regional_products || {}
 
   const [searchTerm, setSearchTerm] = useState('')
   const [showAllProducts, setShowAllProducts] = useState(false)
+  const [showAllRegionais, setShowAllRegionais] = useState(false)
 
   const hasActiveFilters = Object.values(filters).some(v => v !== null)
 
@@ -20,8 +23,17 @@ export default function Filters({ filters, setFilters, options, metadata }) {
         [key]: value,
       }
 
+      // Clear product if category changes and product is not in new category
       if (key === 'categoria' && next.produto && next.categoria) {
         const allowed = categoryProducts[next.categoria] || []
+        if (allowed.length > 0 && !allowed.includes(next.produto)) {
+          next.produto = null
+        }
+      }
+
+      // Clear product if regional changes and product is not in new regional
+      if (key === 'regional' && next.produto && next.regional) {
+        const allowed = regionalProducts[next.regional] || []
         if (allowed.length > 0 && !allowed.includes(next.produto)) {
           next.produto = null
         }
@@ -39,20 +51,32 @@ export default function Filters({ filters, setFilters, options, metadata }) {
     updateFilter('produto', filters.produto === prod ? null : prod)
   }
 
+  const toggleRegional = (reg) => {
+    updateFilter('regional', filters.regional === reg ? null : reg)
+  }
+
   const clearFilters = () => {
     setFilters({
       anoMin: null,
       anoMax: null,
       categoria: null,
       produto: null,
+      regional: null,
     })
     setSearchTerm('')
   }
 
-  // Filter products based on category and search term
-  const availableProducts = filters.categoria && categoryProducts[filters.categoria]?.length
-    ? categoryProducts[filters.categoria]
-    : produtos
+  // Filter products based on category, regional and search term
+  let availableProducts = produtos
+
+  if (filters.categoria && categoryProducts[filters.categoria]?.length) {
+    availableProducts = categoryProducts[filters.categoria]
+  }
+
+  if (filters.regional && regionalProducts[filters.regional]?.length) {
+    const regionalProds = regionalProducts[filters.regional]
+    availableProducts = availableProducts.filter(p => regionalProds.includes(p))
+  }
 
   const filteredProducts = searchTerm
     ? availableProducts.filter(p =>
@@ -61,11 +85,12 @@ export default function Filters({ filters, setFilters, options, metadata }) {
     : availableProducts
 
   const displayedProducts = showAllProducts ? filteredProducts : filteredProducts.slice(0, 8)
+  const displayedRegionais = showAllRegionais ? regionais : regionais.slice(0, 10)
 
   // Year presets
   const yearPresets = [
     { label: 'Todos', min: null, max: null },
-    { label: 'Último ano', min: Math.max(...anos), max: Math.max(...anos) },
+    { label: 'Ultimo ano', min: Math.max(...anos), max: Math.max(...anos) },
     { label: '5 anos', min: Math.max(...anos) - 4, max: Math.max(...anos) },
     { label: '10 anos', min: Math.max(...anos) - 9, max: Math.max(...anos) },
   ]
@@ -114,10 +139,10 @@ export default function Filters({ filters, setFilters, options, metadata }) {
       </div>
 
       <div className="px-4 pb-4 space-y-4">
-        {/* Período */}
+        {/* Periodo */}
         <div>
           <label className="block text-sm font-medium text-dark-600 mb-2">
-            Período
+            Periodo
           </label>
           <div className="flex flex-wrap gap-2 mb-3">
             {yearPresets.map((preset) => (
@@ -137,12 +162,12 @@ export default function Filters({ filters, setFilters, options, metadata }) {
               onChange={(e) => updateFilter('anoMin', e.target.value ? parseInt(e.target.value) : null)}
               className="year-select"
             >
-              <option value="">{metadata?.year_min || 'Início'}</option>
+              <option value="">{metadata?.year_min || 'Inicio'}</option>
               {anos.map(ano => (
                 <option key={ano} value={ano}>{ano}</option>
               ))}
             </select>
-            <span className="text-dark-500">até</span>
+            <span className="text-dark-500">ate</span>
             <select
               value={filters.anoMax || ''}
               onChange={(e) => updateFilter('anoMax', e.target.value ? parseInt(e.target.value) : null)}
@@ -155,6 +180,53 @@ export default function Filters({ filters, setFilters, options, metadata }) {
             </select>
           </div>
         </div>
+
+        {/* Regionais - Only show if regional data is available */}
+        {regionais.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-dark-600 mb-2 flex items-center gap-2">
+              <MapPin className="w-4 h-4" />
+              Regional (Nucleo IDR-PR)
+              {!hasRegionalData && (
+                <span className="text-xs text-dark-400 font-normal">(dados agregados)</span>
+              )}
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {displayedRegionais.map(reg => (
+                <button
+                  key={reg}
+                  onClick={() => toggleRegional(reg)}
+                  className={`filter-chip ${filters.regional === reg ? 'filter-chip-active' : ''}`}
+                >
+                  {reg}
+                  {filters.regional === reg && (
+                    <X className="w-3 h-3 ml-1" />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Show more/less for regionais */}
+            {regionais.length > 10 && (
+              <button
+                onClick={() => setShowAllRegionais(!showAllRegionais)}
+                className="mt-2 text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
+              >
+                {showAllRegionais ? (
+                  <>
+                    <ChevronUp className="w-4 h-4" />
+                    Mostrar menos
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-4 h-4" />
+                    Mostrar todas ({regionais.length})
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Categorias */}
         <div>
@@ -180,7 +252,9 @@ export default function Filters({ filters, setFilters, options, metadata }) {
         {/* Produtos */}
         <div>
           <label className="block text-sm font-medium text-dark-600 mb-2">
-            Produto {filters.categoria && <span className="text-dark-400 font-normal">em {formatCategoryName(filters.categoria)}</span>}
+            Produto
+            {filters.categoria && <span className="text-dark-400 font-normal"> em {formatCategoryName(filters.categoria)}</span>}
+            {filters.regional && <span className="text-dark-400 font-normal"> em {filters.regional}</span>}
           </label>
 
           {/* Search input */}
@@ -256,6 +330,15 @@ export default function Filters({ filters, setFilters, options, metadata }) {
                 <span className="filter-tag">
                   {filters.anoMin || metadata?.year_min} - {filters.anoMax || metadata?.year_max}
                   <button onClick={() => { updateFilter('anoMin', null); updateFilter('anoMax', null) }}>
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {filters.regional && (
+                <span className="filter-tag">
+                  <MapPin className="w-3 h-3" />
+                  {filters.regional}
+                  <button onClick={() => updateFilter('regional', null)}>
                     <X className="w-3 h-3" />
                   </button>
                 </span>

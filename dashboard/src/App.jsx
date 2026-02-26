@@ -29,6 +29,7 @@ function App() {
     anoMax: null,
     categoria: null,
     produto: null,
+    regional: null,
   })
 
   // Forecast state
@@ -70,12 +71,13 @@ function App() {
     const yearMin = filters.anoMin || metadata?.year_min
     const yearMax = filters.anoMax || metadata?.year_max
     const periodLabel = yearMin && yearMax ? `${yearMin} - ${yearMax}` : 'Todos os anos'
+    const regionalLabel = filters.regional || 'Todas as regionais'
     const categoryLabel = filters.categoria
       ? formatCategoryName(filters.categoria)
       : 'Todas as categorias'
     const productLabel = filters.produto || 'Todos os produtos'
 
-    return `Período: ${periodLabel} • Categoria: ${categoryLabel} • Produto: ${productLabel}`
+    return `Periodo: ${periodLabel} | Regional: ${regionalLabel} | Categoria: ${categoryLabel} | Produto: ${productLabel}`
   }, [filters, metadata])
 
   const contextLabel = useMemo(() => {
@@ -117,6 +119,7 @@ function App() {
           setFilters={setFilters}
           options={data?.filters}
           metadata={metadata}
+          hasRegionalData={data?.hasRegionalData}
         />
 
         {/* Section Navigation */}

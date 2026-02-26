@@ -17,6 +17,7 @@ export function useData() {
         setLoading(true)
         setError(null)
 
+        // Load core data files
         const [aggregated, detailed, timeseries, filters] = await Promise.all([
           fetch(DATA_BASE_PATH + 'aggregated.json').then(r => {
             if (!r.ok) throw new Error('Failed to load aggregated.json')
@@ -36,13 +37,30 @@ export function useData() {
           }),
         ])
 
-        const normalizedFilters = normalizeFilters(filters, aggregated, detailed)
+        // Try to load regional data (optional - may not exist)
+        let regionalFilters = null
+        let detailedRegional = null
+
+        try {
+          const [regFilters, regDetailed] = await Promise.all([
+            fetch(DATA_BASE_PATH + 'regional_filters.json').then(r => r.ok ? r.json() : null),
+            fetch(DATA_BASE_PATH + 'detailed_regional.json').then(r => r.ok ? r.json() : null),
+          ])
+          regionalFilters = regFilters
+          detailedRegional = regDetailed
+        } catch (err) {
+          console.warn('Regional data not available:', err)
+        }
+
+        const normalizedFilters = normalizeFilters(filters, aggregated, detailed, regionalFilters)
 
         setData({
           aggregated,
           detailed,
+          detailedRegional,
           timeseries,
           filters: normalizedFilters,
+          hasRegionalData: !!detailedRegional?.records?.length,
         })
       } catch (err) {
         console.error('Error loading data:', err)
@@ -58,7 +76,7 @@ export function useData() {
   return { data, loading, error }
 }
 
-function normalizeFilters(filtersJson, aggregated, detailed) {
+function normalizeFilters(filtersJson, aggregated, detailed, regionalFilters) {
   const anos = new Set()
   const categorias = new Set()
   const produtos = new Set()
@@ -101,39 +119,55 @@ function normalizeFilters(filtersJson, aggregated, detailed) {
     })
   }
 
+  // Extract regionais from regional filters
+  const regionais = regionalFilters?.regionais_com_dados || regionalFilters?.regionais || []
+
   return {
     anos: Array.from(anos).sort((a, b) => a - b),
     categorias: Array.from(categorias).sort((a, b) => a.localeCompare(b)),
     produtos: Array.from(produtos).sort((a, b) => a.localeCompare(b)),
+    regionais: regionais.sort((a, b) => a.localeCompare(b)),
     category_products: categoryProducts,
+    regional_products: regionalFilters?.regional_products || {},
   }
 }
 
 export function useFilteredData(data, filters) {
   return useMemo(() => {
-    if (!data?.detailed?.records) return []
+    // Use regional data if available and regional filter is active, otherwise use regular detailed
+    const useRegionalData = data?.hasRegionalData && filters.regional
+    const records = useRegionalData
+      ? data?.detailedRegional?.records
+      : data?.detailed?.records
 
-    let records = data.detailed.records
+    if (!records) return []
+
+    let filtered = records
 
     // Filter by year range
     if (filters.anoMin) {
-      records = records.filter(r => r.a >= filters.anoMin)
+      filtered = filtered.filter(r => r.a >= filters.anoMin)
     }
     if (filters.anoMax) {
-      records = records.filter(r => r.a <= filters.anoMax)
+      filtered = filtered.filter(r => r.a <= filters.anoMax)
     }
 
     // Filter by category
     if (filters.categoria) {
-      records = records.filter(r => r.c === filters.categoria)
+      filtered = filtered.filter(r => r.c === filters.categoria)
     }
 
     // Filter by product
     if (filters.produto) {
-      records = records.filter(r => r.p === filters.produto)
+      filtered = filtered.filter(r => r.p === filters.produto)
     }
 
-    return records
+    // Filter by regional (only in regional data)
+    if (filters.regional && useRegionalData) {
+      filtered = filtered.filter(r => r.r === filters.regional)
+    }
+
+    return filtered
   }, [data, filters])
 }
 
@@ -147,17 +181,22 @@ export function useAggregations(filteredData, data) {
         maxPrice: 0,
         uniqueProducts: 0,
         uniqueCategories: 0,
+        uniqueRegionais: 0,
         yoyChange: 0,
         topProducts: [],
         byCategory: {},
+        byRegional: {},
         sparklineData: {},
       }
     }
 
+    // Get price field (pm for detailed, v for regional)
+    const getPrice = (r) => r.pm ?? r.v
+
     // Calculate aggregations from filtered data
     const prices = filteredData
-      .filter(r => r.pm && r.pm > 0)
-      .map(r => r.pm)
+      .filter(r => getPrice(r) && getPrice(r) > 0)
+      .map(r => getPrice(r))
 
     const avgPrice = prices.length > 0
       ? prices.reduce((a, b) => a + b, 0) / prices.length
@@ -168,6 +207,7 @@ export function useAggregations(filteredData, data) {
 
     const products = new Set(filteredData.map(r => r.p))
     const categories = new Set(filteredData.map(r => r.c))
+    const regionais = new Set(filteredData.filter(r => r.r).map(r => r.r))
 
     // Calculate YoY (Year over Year) change
     const years = [...new Set(filteredData.map(r => r.a))].sort((a, b) => b - a)
@@ -177,11 +217,11 @@ export function useAggregations(filteredData, data) {
       const prevYear = years[1]
 
       const currentYearPrices = filteredData
-        .filter(r => r.a === currentYear && r.pm > 0)
-        .map(r => r.pm)
+        .filter(r => r.a === currentYear && getPrice(r) > 0)
+        .map(r => getPrice(r))
       const prevYearPrices = filteredData
-        .filter(r => r.a === prevYear && r.pm > 0)
-        .map(r => r.pm)
+        .filter(r => r.a === prevYear && getPrice(r) > 0)
+        .map(r => getPrice(r))
 
       if (currentYearPrices.length > 0 && prevYearPrices.length > 0) {
         const currentAvg = currentYearPrices.reduce((a, b) => a + b, 0) / currentYearPrices.length
@@ -196,6 +236,7 @@ export function useAggregations(filteredData, data) {
 
     filteredData.forEach(r => {
       if (!r.p) return
+      const price = getPrice(r)
       if (!productStats[r.p]) {
         productStats[r.p] = { count: 0, sum: 0, categoria: r.c, unidade: r.u || null }
         productByYear[r.p] = {}
@@ -204,13 +245,13 @@ export function useAggregations(filteredData, data) {
         productStats[r.p].unidade = r.u
       }
       productStats[r.p].count++
-      if (r.pm) {
-        productStats[r.p].sum += r.pm
+      if (price) {
+        productStats[r.p].sum += price
         // Track by year for variation calculation
         if (!productByYear[r.p][r.a]) {
           productByYear[r.p][r.a] = { sum: 0, count: 0 }
         }
-        productByYear[r.p][r.a].sum += r.pm
+        productByYear[r.p][r.a].sum += price
         productByYear[r.p][r.a].count++
       }
     })
@@ -240,14 +281,14 @@ export function useAggregations(filteredData, data) {
         // Generate sparkline data (monthly averages, last 12 months)
         const monthlyData = {}
         filteredData
-          .filter(r => r.p === produto && r.pm > 0)
+          .filter(r => r.p === produto && getPrice(r) > 0)
           .forEach(r => {
             const month = getRecordMonth(r)
             const key = `${r.a}-${String(month).padStart(2, '0')}`
             if (!monthlyData[key]) {
               monthlyData[key] = { sum: 0, count: 0 }
             }
-            monthlyData[key].sum += r.pm
+            monthlyData[key].sum += getPrice(r)
             monthlyData[key].count++
           })
 
@@ -271,6 +312,7 @@ export function useAggregations(filteredData, data) {
     const byCategory = {}
     filteredData.forEach(r => {
       if (!r.c) return
+      const price = getPrice(r)
       if (!byCategory[r.c]) {
         byCategory[r.c] = {
           count: 0,
@@ -282,16 +324,50 @@ export function useAggregations(filteredData, data) {
       }
       byCategory[r.c].count++
       if (r.p) byCategory[r.c].products.add(r.p)
-      if (r.pm) {
-        byCategory[r.c].sum += r.pm
-        byCategory[r.c].min = Math.min(byCategory[r.c].min, r.pm)
-        byCategory[r.c].max = Math.max(byCategory[r.c].max, r.pm)
+      if (price) {
+        byCategory[r.c].sum += price
+        byCategory[r.c].min = Math.min(byCategory[r.c].min, price)
+        byCategory[r.c].max = Math.max(byCategory[r.c].max, price)
       }
     })
 
     Object.keys(byCategory).forEach(cat => {
       const stats = byCategory[cat]
       byCategory[cat] = {
+        media: stats.count > 0 ? stats.sum / stats.count : 0,
+        minimo: stats.min === Infinity ? 0 : stats.min,
+        maximo: stats.max === -Infinity ? 0 : stats.max,
+        registros: stats.count,
+        produtos: stats.products.size,
+      }
+    })
+
+    // Group by regional
+    const byRegional = {}
+    filteredData.forEach(r => {
+      if (!r.r) return
+      const price = getPrice(r)
+      if (!byRegional[r.r]) {
+        byRegional[r.r] = {
+          count: 0,
+          sum: 0,
+          min: Infinity,
+          max: -Infinity,
+          products: new Set(),
+        }
+      }
+      byRegional[r.r].count++
+      if (r.p) byRegional[r.r].products.add(r.p)
+      if (price) {
+        byRegional[r.r].sum += price
+        byRegional[r.r].min = Math.min(byRegional[r.r].min, price)
+        byRegional[r.r].max = Math.max(byRegional[r.r].max, price)
+      }
+    })
+
+    Object.keys(byRegional).forEach(reg => {
+      const stats = byRegional[reg]
+      byRegional[reg] = {
         media: stats.count > 0 ? stats.sum / stats.count : 0,
         minimo: stats.min === Infinity ? 0 : stats.min,
         maximo: stats.max === -Infinity ? 0 : stats.max,
@@ -307,9 +383,11 @@ export function useAggregations(filteredData, data) {
       maxPrice,
       uniqueProducts: products.size,
       uniqueCategories: categories.size,
+      uniqueRegionais: regionais.size,
       yoyChange,
       topProducts,
       byCategory,
+      byRegional,
       sparklineData,
     }
   }, [filteredData, data])
@@ -333,10 +411,12 @@ export function useFilteredTimeSeries(filteredData) {
   return useMemo(() => {
     if (!filteredData || filteredData.length === 0) return {}
 
+    const getPrice = (r) => r.pm ?? r.v
     const byPeriod = {}
 
     filteredData.forEach(r => {
-      if (!r.a || !r.pm) return
+      const price = getPrice(r)
+      if (!r.a || !price) return
       const month = getRecordMonth(r)
       const period = `${r.a}-${String(month).padStart(2, '0')}`
 
@@ -344,10 +424,10 @@ export function useFilteredTimeSeries(filteredData) {
         byPeriod[period] = { sum: 0, count: 0, min: Infinity, max: -Infinity }
       }
 
-      byPeriod[period].sum += r.pm
+      byPeriod[period].sum += price
       byPeriod[period].count++
-      byPeriod[period].min = Math.min(byPeriod[period].min, r.pm)
-      byPeriod[period].max = Math.max(byPeriod[period].max, r.pm)
+      byPeriod[period].min = Math.min(byPeriod[period].min, price)
+      byPeriod[period].max = Math.max(byPeriod[period].max, price)
     })
 
     const result = {}
