@@ -3,6 +3,7 @@
 """
 Flask API v2 for SIMA Daily Quotations
 Enhanced with regional granularity and commercial endpoints.
+Version: 2.1.0 - Build 2026-02-26
 
 Endpoints:
   Public (Dashboard):
@@ -254,7 +255,8 @@ def index():
     return jsonify({
         'status': 'ok',
         'service': 'SIMA Daily Quotations API',
-        'version': '2.0',
+        'version': '2.1.0',
+        'build': '2026-02-26',
         'timestamp': datetime.now().isoformat(),
         'documentation': {
             'public_endpoints': {
@@ -282,6 +284,22 @@ def index():
                 'pro': '300 requests/minute, 10000/day'
             }
         }
+    })
+
+
+@app.route('/api/debug/routes')
+def debug_routes():
+    """Debug: List all registered routes."""
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods': list(rule.methods - {'HEAD', 'OPTIONS'}),
+            'path': rule.rule
+        })
+    return jsonify({
+        'routes': sorted(routes, key=lambda x: x['path']),
+        'total': len(routes)
     })
 
 
