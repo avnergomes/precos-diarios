@@ -1,18 +1,40 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Flask API for SIMA Daily Quotations Dashboard
-Serves processed data and handles daily updates.
+Flask API v2 for SIMA Daily Quotations
+Enhanced with regional granularity and commercial endpoints.
+Version: 2.1.0 - Build 2026-02-26
+
+Endpoints:
+  Public (Dashboard):
+    GET /                     - API health check
+    GET /api/status           - Data status
+    GET /api/data/<filename>  - Static JSON files
+
+  API v1 (Commercial - Requires API Key):
+    GET /api/v1/products      - List products with metadata
+    GET /api/v1/regions       - List regional nuclei
+    GET /api/v1/categories    - List product categories
+    GET /api/v1/prices        - Query prices (filters: product, region, category, date range)
+    GET /api/v1/prices/latest - Latest prices by product/region
+    GET /api/v1/timeseries    - Time series with regional filtering
+    GET /api/v1/forecast/<produto> - Price forecasts
+    GET /api/v1/stats         - Aggregate statistics
 """
 
 import os
 import json
+import time
 import logging
+import functools
 from pathlib import Path
-from datetime import datetime
-from flask import Flask, jsonify, send_from_directory
+from datetime import datetime, timedelta
+from collections import defaultdict
+from flask import Flask, jsonify, request, send_from_directory, g
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
+import pandas as pd
+import requests as http_requests
 
 # Configure logging
 logging.basicConfig(
@@ -30,64 +52,188 @@ JSON_DIR = DATA_DIR / "json"
 app = Flask(__name__)
 CORS(app)
 
-# Import scraper with fallback for different execution contexts
-try:
-    from scraper import scrape_latest_quotations
-except ImportError:
-    from api.scraper import scrape_latest_quotations
+# Rate limiting storage (in production use Redis)
+rate_limit_storage = defaultdict(list)
+RATE_LIMIT_REQUESTS = 100  # requests per window
+RATE_LIMIT_WINDOW = 60  # seconds
 
-# Import forecast with fallback - may not be available if deps missing
-HAS_FORECAST = False
-try:
-    from forecast import generate_forecast, get_available_products
-    HAS_FORECAST = True
-except ImportError:
+# API Keys (in production use database/secrets manager)
+# Format: {api_key: {name, tier, requests_per_minute}}
+API_KEYS = {
+    os.environ.get('API_KEY_FREE', 'demo-key-free'): {
+        'name': 'Demo Free',
+        'tier': 'free',
+        'rpm': 10,
+        'daily_limit': 100
+    },
+    os.environ.get('API_KEY_BASIC', 'demo-key-basic'): {
+        'name': 'Demo Basic',
+        'tier': 'basic',
+        'rpm': 60,
+        'daily_limit': 1000
+    },
+    os.environ.get('API_KEY_PRO', 'demo-key-pro'): {
+        'name': 'Demo Pro',
+        'tier': 'pro',
+        'rpm': 300,
+        'daily_limit': 10000
+    },
+}
+
+# Tier limits configuration for external keys
+TIER_LIMITS = {
+    'free': {'rpm': 10, 'daily': 100},
+    'basic': {'rpm': 60, 'daily': 1000},
+    'pro': {'rpm': 300, 'daily': 10000}
+}
+
+# External keys cache (from Google Sheets)
+_external_keys_cache = {}
+_external_keys_timestamp = None
+EXTERNAL_KEYS_TTL = 300  # 5 minutes
+
+# Cache for loaded data
+_data_cache = {}
+_cache_timestamp = None
+CACHE_TTL = 300  # 5 minutes
+
+
+def load_consolidated_data(regional: bool = True) -> pd.DataFrame:
+    """Load consolidated CSV with caching.
+
+    Args:
+        regional: If True, load regional data; if False, load aggregated data
+    """
+    global _data_cache, _cache_timestamp
+
+    cache_key = 'df_regional' if regional else 'df_aggregated'
+    now = time.time()
+    if _cache_timestamp and (now - _cache_timestamp) < CACHE_TTL:
+        if cache_key in _data_cache:
+            return _data_cache[cache_key]
+
+    # Select appropriate file
+    if regional:
+        csv_path = PROCESSED_DIR / "consolidated_regional.csv"
+        if not csv_path.exists():
+            csv_path = PROCESSED_DIR / "consolidated.csv"  # Fallback
+    else:
+        csv_path = PROCESSED_DIR / "consolidated.csv"
+
+    if not csv_path.exists():
+        return pd.DataFrame()
+
+    for encoding in ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']:
+        try:
+            df = pd.read_csv(csv_path, encoding=encoding)
+            df['data'] = pd.to_datetime(df['data'], errors='coerce')
+            # Handle different price column names
+            if 'preco' in df.columns:
+                df['preco'] = pd.to_numeric(df['preco'], errors='coerce')
+            elif 'preco_medio' in df.columns:
+                df['preco'] = pd.to_numeric(df['preco_medio'], errors='coerce')
+            _data_cache[cache_key] = df
+            _cache_timestamp = now
+            return df
+        except Exception:
+            continue
+
+    return pd.DataFrame()
+
+
+def load_external_keys():
+    """Load API keys from Google Sheets via Apps Script."""
+    global _external_keys_cache, _external_keys_timestamp
+
+    url = os.environ.get('APPS_SCRIPT_URL')
+    secret = os.environ.get('APPS_SCRIPT_SECRET')
+
+    if not url or not secret:
+        return {}
+
     try:
-        from api.forecast import generate_forecast, get_available_products
-        HAS_FORECAST = True
-    except ImportError:
-        logger.warning("Forecast module not available")
+        response = http_requests.get(f"{url}?action=list&secret={secret}", timeout=10)
+        if response.status_code != 200:
+            logger.warning(f"Apps Script returned status {response.status_code}")
+            return {}
 
-# Import ETL with fallback
-try:
-    from etl_process import process_all_files
-except ImportError:
-    from api.etl_process import process_all_files
-
-# Import preprocessing with fallback
-try:
-    from preprocess_data import main as preprocess_main
-except ImportError:
-    from api.preprocess_data import main as preprocess_main
-
-# Ensure directories exist
-JSON_DIR.mkdir(parents=True, exist_ok=True)
-PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def run_pipeline():
-    """Run the complete ETL pipeline."""
-    logger.info("Starting ETL pipeline...")
-
-    try:
-        scrape_latest_quotations()
-        logger.info("Scraping completed")
+        data = response.json()
+        keys = {}
+        for k in data.get('keys', []):
+            tier = k.get('tier', 'free')
+            limits = TIER_LIMITS.get(tier, TIER_LIMITS['free'])
+            keys[k['api_key']] = {
+                'name': k.get('name', 'Unknown'),
+                'tier': tier,
+                'rpm': limits['rpm'],
+                'daily_limit': limits['daily']
+            }
+        logger.info(f"Loaded {len(keys)} external API keys from Google Sheets")
+        return keys
     except Exception as e:
-        logger.error(f"Scraping error: {e}")
+        logger.error(f"Error loading external keys: {e}")
+        return {}
 
-    try:
-        process_all_files()
-        logger.info("ETL completed")
-    except Exception as e:
-        logger.error(f"ETL error: {e}")
 
-    try:
-        preprocess_main()
-        logger.info("Preprocessing completed")
-    except Exception as e:
-        logger.error(f"Preprocessing error: {e}")
+def get_all_api_keys():
+    """Get all valid API keys (local + external from Google Sheets)."""
+    global _external_keys_cache, _external_keys_timestamp
 
-    logger.info("Pipeline completed")
+    now = time.time()
+
+    # Refresh external keys if cache expired
+    if _external_keys_timestamp is None or (now - _external_keys_timestamp) > EXTERNAL_KEYS_TTL:
+        _external_keys_cache = load_external_keys()
+        _external_keys_timestamp = now
+
+    # Merge local and external keys (local takes precedence)
+    return {**_external_keys_cache, **API_KEYS}
+
+
+def require_api_key(f):
+    """Decorator to require API key for commercial endpoints."""
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+
+        if not api_key:
+            return jsonify({
+                'error': 'API key required',
+                'message': 'Provide API key via X-API-Key header or api_key query param'
+            }), 401
+
+        all_keys = get_all_api_keys()
+
+        if api_key not in all_keys:
+            return jsonify({
+                'error': 'Invalid API key',
+                'message': 'The provided API key is not valid'
+            }), 403
+
+        # Store key info in request context
+        g.api_key = api_key
+        g.api_info = all_keys[api_key]
+
+        # Rate limiting
+        key_requests = rate_limit_storage[api_key]
+        now = time.time()
+        window_start = now - 60
+
+        # Clean old entries
+        key_requests[:] = [t for t in key_requests if t > window_start]
+
+        if len(key_requests) >= g.api_info['rpm']:
+            return jsonify({
+                'error': 'Rate limit exceeded',
+                'message': f"Maximum {g.api_info['rpm']} requests per minute for {g.api_info['tier']} tier",
+                'retry_after': 60 - int(now - key_requests[0])
+            }), 429
+
+        key_requests.append(now)
+
+        return f(*args, **kwargs)
+
+    return decorated
 
 
 def load_json_file(filename: str) -> dict:
@@ -99,22 +245,61 @@ def load_json_file(filename: str) -> dict:
     return {}
 
 
+# ====================
+# PUBLIC ENDPOINTS
+# ====================
+
 @app.route('/')
 def index():
-    """API health check."""
+    """API health check and documentation."""
     return jsonify({
         'status': 'ok',
         'service': 'SIMA Daily Quotations API',
+        'version': '2.1.0',
+        'build': '2026-02-26',
         'timestamp': datetime.now().isoformat(),
-        'endpoints': {
-            'data': '/api/data/<filename>',
-            'aggregated': '/api/data/aggregated.json',
-            'timeseries': '/api/data/timeseries.json',
-            'filters': '/api/data/filters.json',
-            'detailed': '/api/data/detailed.json',
-            'refresh': '/api/refresh (POST)',
-            'status': '/api/status',
+        'documentation': {
+            'public_endpoints': {
+                'health': 'GET /',
+                'status': 'GET /api/status',
+                'data_files': 'GET /api/data/<filename>',
+            },
+            'commercial_endpoints': {
+                'base_url': '/api/v1/',
+                'authentication': 'X-API-Key header or api_key query param',
+                'endpoints': {
+                    'products': 'GET /api/v1/products',
+                    'regions': 'GET /api/v1/regions',
+                    'categories': 'GET /api/v1/categories',
+                    'prices': 'GET /api/v1/prices?product=X&region=Y&start_date=Z',
+                    'latest': 'GET /api/v1/prices/latest',
+                    'timeseries': 'GET /api/v1/timeseries?product=X',
+                    'forecast': 'GET /api/v1/forecast/<produto>',
+                    'stats': 'GET /api/v1/stats',
+                }
+            },
+            'rate_limits': {
+                'free': '10 requests/minute, 100/day',
+                'basic': '60 requests/minute, 1000/day',
+                'pro': '300 requests/minute, 10000/day'
+            }
         }
+    })
+
+
+@app.route('/api/debug/routes')
+def debug_routes():
+    """Debug: List all registered routes."""
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods': list(rule.methods - {'HEAD', 'OPTIONS'}),
+            'path': rule.rule
+        })
+    return jsonify({
+        'routes': sorted(routes, key=lambda x: x['path']),
+        'total': len(routes)
     })
 
 
@@ -122,7 +307,13 @@ def index():
 def status():
     """Get pipeline status and data info."""
     files_info = {}
-    for filename in ['aggregated.json', 'timeseries.json', 'filters.json', 'detailed.json']:
+
+    # Check JSON files
+    json_files = [
+        'aggregated.json', 'timeseries.json', 'filters.json', 'detailed.json',
+        'daily_series.json', 'regional_prices.json', 'regional_statistics.json'
+    ]
+    for filename in json_files:
         filepath = JSON_DIR / filename
         if filepath.exists():
             stat = filepath.stat()
@@ -134,27 +325,52 @@ def status():
         else:
             files_info[filename] = {'exists': False}
 
-    # Check consolidated.csv
-    csv_path = PROCESSED_DIR / "consolidated.csv"
-    if csv_path.exists():
-        stat = csv_path.stat()
-        files_info['consolidated.csv'] = {
-            'exists': True,
-            'size_kb': round(stat.st_size / 1024, 1),
-            'modified': datetime.fromtimestamp(stat.st_mtime).isoformat()
+    # Check CSV files
+    for csv_name in ['consolidated.csv', 'consolidated_regional.csv']:
+        csv_path = PROCESSED_DIR / csv_name
+        if csv_path.exists():
+            stat = csv_path.stat()
+            files_info[csv_name] = {
+                'exists': True,
+                'size_kb': round(stat.st_size / 1024, 1),
+                'modified': datetime.fromtimestamp(stat.st_mtime).isoformat()
+            }
+
+    # Data summary
+    df = load_consolidated_data()
+    data_summary = {}
+    if not df.empty:
+        data_summary = {
+            'total_records': len(df),
+            'products': df['produto'].nunique() if 'produto' in df.columns else 0,
+            'regions': df['regional'].nunique() if 'regional' in df.columns else 0,
+            'date_range': {
+                'min': df['data'].min().isoformat() if df['data'].notna().any() else None,
+                'max': df['data'].max().isoformat() if df['data'].notna().any() else None,
+            }
         }
 
     return jsonify({
         'status': 'ok',
         'files': files_info,
+        'data_summary': data_summary,
         'timestamp': datetime.now().isoformat()
     })
 
 
 @app.route('/api/data/<filename>')
 def get_data(filename):
-    """Serve JSON data files."""
-    allowed_files = ['aggregated.json', 'timeseries.json', 'filters.json', 'detailed.json']
+    """Serve JSON data files (public, for dashboard)."""
+    allowed_files = [
+        # Aggregated data
+        'aggregated.json', 'timeseries.json', 'filters.json', 'detailed.json',
+        'daily_series.json', 'volatility.json', 'regional_spread.json',
+        # Regional data
+        'regional_prices.json', 'regional_comparison.json', 'regional_filters.json',
+        'regional_timeseries.json', 'detailed_regional.json', 'regional_statistics.json',
+        # Legacy
+        'regional_data.json', 'forecast_products.json'
+    ]
 
     if filename not in allowed_files:
         return jsonify({'error': 'File not found'}), 404
@@ -166,101 +382,472 @@ def get_data(filename):
     return send_from_directory(JSON_DIR, filename, mimetype='application/json')
 
 
-@app.route('/api/refresh', methods=['POST'])
-def refresh_data():
-    """Trigger a data refresh (protected by API key)."""
-    api_key = os.environ.get('REFRESH_API_KEY')
-    provided_key = request.headers.get('X-API-Key')
-    if not provided_key and request.is_json:
-        provided_key = request.json.get('api_key')
+# ====================
+# COMMERCIAL API v1
+# ====================
 
-    if not api_key or provided_key != api_key:
-        return jsonify({'error': 'Unauthorized', 'message': 'Valid API key required'}), 401
-
-    try:
-        run_pipeline()
-        return jsonify({
-            'status': 'ok',
-            'message': 'Pipeline executed successfully',
-            'timestamp': datetime.now().isoformat()
-        })
-    except Exception as e:
-        logger.error(f"Pipeline error: {e}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
-
-
-@app.route('/api/aggregated')
-def get_aggregated():
-    """Get aggregated data."""
-    data = load_json_file('aggregated.json')
-    return jsonify(data)
-
-
-@app.route('/api/timeseries')
-def get_timeseries():
-    """Get time series data."""
-    data = load_json_file('timeseries.json')
-    return jsonify(data)
-
-
-@app.route('/api/filters')
-def get_filters():
-    """Get filter options."""
-    data = load_json_file('filters.json')
-    return jsonify(data)
-
-
-@app.route('/api/forecast/<produto>')
-def get_forecast(produto):
+@app.route('/api/v1/products')
+@require_api_key
+def get_products():
     """
-    Get price forecast for a specific product.
-
-    Args:
-        produto: Product name (URL encoded)
+    List all products with metadata.
 
     Query params:
-        horizonte: Forecast horizon in days (default: 30)
-        modelo: Model to use ('arima', 'prophet', 'linear', 'all') (default: 'all')
-
-    Returns:
-        JSON with historical data, predictions, and metrics
+        category: Filter by category
+        search: Search in product name
+        limit: Max results (default 100)
     """
-    if not HAS_FORECAST:
+    df = load_consolidated_data()
+    if df.empty:
+        return jsonify({'success': False, 'error': 'No data available'}), 503
+
+    category = request.args.get('category')
+    search = request.args.get('search', '').lower()
+    limit = min(int(request.args.get('limit', 100)), 500)
+
+    products_df = df.groupby('produto').agg({
+        'categoria': 'first',
+        'unidade': 'first',
+        'preco': ['mean', 'min', 'max', 'count'],
+        'data': ['min', 'max']
+    }).reset_index()
+
+    products_df.columns = ['produto', 'categoria', 'unidade',
+                           'preco_medio', 'preco_min', 'preco_max', 'registros',
+                           'data_inicio', 'data_fim']
+
+    if category:
+        products_df = products_df[products_df['categoria'].str.lower() == category.lower()]
+
+    if search:
+        products_df = products_df[products_df['produto'].str.lower().str.contains(search)]
+
+    products = []
+    for _, row in products_df.head(limit).iterrows():
+        products.append({
+            'produto': row['produto'],
+            'categoria': row['categoria'],
+            'unidade': row['unidade'],
+            'preco_medio': round(float(row['preco_medio']), 2),
+            'preco_min': round(float(row['preco_min']), 2),
+            'preco_max': round(float(row['preco_max']), 2),
+            'registros': int(row['registros']),
+            'periodo': {
+                'inicio': row['data_inicio'].isoformat() if pd.notna(row['data_inicio']) else None,
+                'fim': row['data_fim'].isoformat() if pd.notna(row['data_fim']) else None
+            }
+        })
+
+    return jsonify({
+        'success': True,
+        'total': len(products_df),
+        'returned': len(products),
+        'products': products
+    })
+
+
+@app.route('/api/v1/regions')
+@require_api_key
+def get_regions():
+    """List all regional nuclei with statistics."""
+    df = load_consolidated_data()
+    if df.empty or 'regional' not in df.columns:
+        return jsonify({'success': False, 'error': 'No regional data available'}), 503
+
+    regions_df = df.groupby('regional').agg({
+        'preco': ['mean', 'count'],
+        'produto': 'nunique',
+        'data': ['min', 'max']
+    }).reset_index()
+
+    regions_df.columns = ['regional', 'preco_medio', 'registros', 'produtos',
+                          'data_inicio', 'data_fim']
+
+    regions = []
+    for _, row in regions_df.sort_values('regional').iterrows():
+        regions.append({
+            'regional': row['regional'],
+            'preco_medio': round(float(row['preco_medio']), 2),
+            'registros': int(row['registros']),
+            'produtos': int(row['produtos']),
+            'periodo': {
+                'inicio': row['data_inicio'].isoformat() if pd.notna(row['data_inicio']) else None,
+                'fim': row['data_fim'].isoformat() if pd.notna(row['data_fim']) else None
+            }
+        })
+
+    return jsonify({
+        'success': True,
+        'total': len(regions),
+        'regions': regions
+    })
+
+
+@app.route('/api/v1/categories')
+@require_api_key
+def get_categories():
+    """List product categories with statistics."""
+    df = load_consolidated_data()
+    if df.empty:
+        return jsonify({'success': False, 'error': 'No data available'}), 503
+
+    categories_df = df.groupby('categoria').agg({
+        'preco': 'mean',
+        'produto': 'nunique'
+    }).reset_index()
+
+    categories = []
+    for _, row in categories_df.sort_values('categoria').iterrows():
+        products = df[df['categoria'] == row['categoria']]['produto'].unique().tolist()
+        categories.append({
+            'categoria': row['categoria'],
+            'preco_medio': round(float(row['preco']), 2),
+            'num_produtos': int(row['produto']),
+            'produtos': sorted(products)[:20]  # Limit to 20 examples
+        })
+
+    return jsonify({
+        'success': True,
+        'total': len(categories),
+        'categories': categories
+    })
+
+
+@app.route('/api/v1/prices')
+@require_api_key
+def get_prices():
+    """
+    Query prices with filters.
+
+    Query params:
+        product: Product name (required or use category)
+        region: Regional nucleus
+        category: Product category
+        start_date: Start date (YYYY-MM-DD)
+        end_date: End date (YYYY-MM-DD)
+        limit: Max results (default 1000, max 10000)
+        offset: Pagination offset
+        format: 'full' or 'compact' (default compact)
+    """
+    df = load_consolidated_data()
+    if df.empty:
+        return jsonify({'success': False, 'error': 'No data available'}), 503
+
+    product = request.args.get('product')
+    region = request.args.get('region')
+    category = request.args.get('category')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    limit = min(int(request.args.get('limit', 1000)), 10000)
+    offset = int(request.args.get('offset', 0))
+    format_type = request.args.get('format', 'compact')
+
+    # Apply filters
+    filtered = df.copy()
+
+    if product:
+        filtered = filtered[filtered['produto'].str.lower() == product.lower()]
+
+    if region and 'regional' in filtered.columns:
+        filtered = filtered[filtered['regional'].str.lower() == region.lower()]
+
+    if category:
+        filtered = filtered[filtered['categoria'].str.lower() == category.lower()]
+
+    if start_date:
+        filtered = filtered[filtered['data'] >= pd.to_datetime(start_date)]
+
+    if end_date:
+        filtered = filtered[filtered['data'] <= pd.to_datetime(end_date)]
+
+    total = len(filtered)
+    filtered = filtered.sort_values('data', ascending=False).iloc[offset:offset + limit]
+
+    # Format results
+    if format_type == 'compact':
+        records = []
+        for _, row in filtered.iterrows():
+            rec = {
+                'd': row['data'].strftime('%Y-%m-%d') if pd.notna(row['data']) else None,
+                'p': row['produto'],
+                'v': round(float(row['preco']), 2)
+            }
+            if 'regional' in row and pd.notna(row['regional']):
+                rec['r'] = row['regional']
+            records.append(rec)
+    else:
+        records = []
+        for _, row in filtered.iterrows():
+            records.append({
+                'data': row['data'].strftime('%Y-%m-%d') if pd.notna(row['data']) else None,
+                'produto': row['produto'],
+                'categoria': row.get('categoria'),
+                'regional': row.get('regional') if 'regional' in row else None,
+                'preco': round(float(row['preco']), 2),
+                'unidade': row.get('unidade')
+            })
+
+    return jsonify({
+        'success': True,
+        'total': total,
+        'offset': offset,
+        'limit': limit,
+        'returned': len(records),
+        'prices': records
+    })
+
+
+@app.route('/api/v1/prices/latest')
+@require_api_key
+def get_latest_prices():
+    """
+    Get latest prices for each product/region combination.
+
+    Query params:
+        product: Filter by product
+        region: Filter by region
+        category: Filter by category
+        days: Number of days back to consider (default 7)
+    """
+    df = load_consolidated_data()
+    if df.empty:
+        return jsonify({'success': False, 'error': 'No data available'}), 503
+
+    product = request.args.get('product')
+    region = request.args.get('region')
+    category = request.args.get('category')
+    days = int(request.args.get('days', 7))
+
+    # Filter by date
+    cutoff = df['data'].max() - timedelta(days=days)
+    recent = df[df['data'] >= cutoff].copy()
+
+    if product:
+        recent = recent[recent['produto'].str.lower() == product.lower()]
+
+    if region and 'regional' in recent.columns:
+        recent = recent[recent['regional'].str.lower() == region.lower()]
+
+    if category:
+        recent = recent[recent['categoria'].str.lower() == category.lower()]
+
+    # Get latest per product+region
+    has_regional = 'regional' in recent.columns
+
+    if has_regional:
+        latest = recent.sort_values('data').groupby(['produto', 'regional']).last().reset_index()
+    else:
+        latest = recent.sort_values('data').groupby('produto').last().reset_index()
+
+    records = []
+    for _, row in latest.iterrows():
+        rec = {
+            'data': row['data'].strftime('%Y-%m-%d') if pd.notna(row['data']) else None,
+            'produto': row['produto'],
+            'categoria': row.get('categoria'),
+            'preco': round(float(row['preco']), 2),
+            'unidade': row.get('unidade')
+        }
+        if has_regional:
+            rec['regional'] = row['regional']
+        records.append(rec)
+
+    return jsonify({
+        'success': True,
+        'reference_date': df['data'].max().strftime('%Y-%m-%d'),
+        'lookback_days': days,
+        'total': len(records),
+        'prices': records
+    })
+
+
+@app.route('/api/v1/timeseries')
+@require_api_key
+def get_timeseries():
+    """
+    Get time series data for a product.
+
+    Query params:
+        product: Product name (required)
+        region: Regional nucleus (optional)
+        start_date: Start date
+        end_date: End date
+        aggregation: 'daily', 'weekly', 'monthly' (default daily)
+    """
+    df = load_consolidated_data()
+    if df.empty:
+        return jsonify({'success': False, 'error': 'No data available'}), 503
+
+    product = request.args.get('product')
+    if not product:
+        return jsonify({'success': False, 'error': 'Product parameter required'}), 400
+
+    region = request.args.get('region')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    aggregation = request.args.get('aggregation', 'daily')
+
+    # Filter
+    filtered = df[df['produto'].str.lower() == product.lower()].copy()
+
+    if filtered.empty:
         return jsonify({
             'success': False,
-            'error': 'Modulo de previsao nao disponivel'
-        }), 503
+            'error': f'Product not found: {product}',
+            'available_products': df['produto'].unique().tolist()[:20]
+        }), 404
 
-    from flask import request
+    if region and 'regional' in filtered.columns:
+        filtered = filtered[filtered['regional'].str.lower() == region.lower()]
 
+    if start_date:
+        filtered = filtered[filtered['data'] >= pd.to_datetime(start_date)]
+
+    if end_date:
+        filtered = filtered[filtered['data'] <= pd.to_datetime(end_date)]
+
+    # Aggregate
+    if aggregation == 'weekly':
+        filtered['periodo'] = filtered['data'].dt.to_period('W').dt.start_time
+    elif aggregation == 'monthly':
+        filtered['periodo'] = filtered['data'].dt.to_period('M').dt.start_time
+    else:
+        filtered['periodo'] = filtered['data']
+
+    agg = filtered.groupby('periodo').agg({
+        'preco': ['mean', 'min', 'max', 'count']
+    }).reset_index()
+    agg.columns = ['data', 'media', 'minimo', 'maximo', 'amostras']
+
+    series = []
+    for _, row in agg.sort_values('data').iterrows():
+        series.append({
+            'data': row['data'].strftime('%Y-%m-%d') if pd.notna(row['data']) else None,
+            'media': round(float(row['media']), 2),
+            'minimo': round(float(row['minimo']), 2),
+            'maximo': round(float(row['maximo']), 2),
+            'amostras': int(row['amostras'])
+        })
+
+    return jsonify({
+        'success': True,
+        'product': product,
+        'region': region,
+        'aggregation': aggregation,
+        'points': len(series),
+        'timeseries': series
+    })
+
+
+@app.route('/api/v1/stats')
+@require_api_key
+def get_stats():
+    """
+    Get aggregate statistics.
+
+    Query params:
+        product: Filter by product
+        region: Filter by region
+        category: Filter by category
+        period: 'year', 'month', 'all' (default all)
+    """
+    df = load_consolidated_data()
+    if df.empty:
+        return jsonify({'success': False, 'error': 'No data available'}), 503
+
+    product = request.args.get('product')
+    region = request.args.get('region')
+    category = request.args.get('category')
+    period = request.args.get('period', 'all')
+
+    filtered = df.copy()
+
+    if product:
+        filtered = filtered[filtered['produto'].str.lower() == product.lower()]
+
+    if region and 'regional' in filtered.columns:
+        filtered = filtered[filtered['regional'].str.lower() == region.lower()]
+
+    if category:
+        filtered = filtered[filtered['categoria'].str.lower() == category.lower()]
+
+    if filtered.empty:
+        return jsonify({'success': False, 'error': 'No data for filters'}), 404
+
+    # Calculate stats
+    stats = {
+        'total_records': len(filtered),
+        'price_stats': {
+            'mean': round(float(filtered['preco'].mean()), 2),
+            'std': round(float(filtered['preco'].std()), 2),
+            'min': round(float(filtered['preco'].min()), 2),
+            'max': round(float(filtered['preco'].max()), 2),
+            'median': round(float(filtered['preco'].median()), 2)
+        },
+        'coverage': {
+            'products': filtered['produto'].nunique(),
+            'regions': filtered['regional'].nunique() if 'regional' in filtered.columns else 0,
+            'date_range': {
+                'start': filtered['data'].min().strftime('%Y-%m-%d'),
+                'end': filtered['data'].max().strftime('%Y-%m-%d')
+            }
+        }
+    }
+
+    # Add period breakdown
+    if period == 'year':
+        filtered['ano'] = filtered['data'].dt.year
+        by_period = filtered.groupby('ano')['preco'].agg(['mean', 'count']).reset_index()
+        stats['by_period'] = {
+            int(row['ano']): {'mean': round(float(row['mean']), 2), 'count': int(row['count'])}
+            for _, row in by_period.iterrows()
+        }
+    elif period == 'month':
+        filtered['mes'] = filtered['data'].dt.to_period('M').astype(str)
+        by_period = filtered.groupby('mes')['preco'].agg(['mean', 'count']).reset_index()
+        stats['by_period'] = {
+            row['mes']: {'mean': round(float(row['mean']), 2), 'count': int(row['count'])}
+            for _, row in by_period.tail(24).iterrows()  # Last 24 months
+        }
+
+    return jsonify({
+        'success': True,
+        'filters': {'product': product, 'region': region, 'category': category},
+        'stats': stats
+    })
+
+
+@app.route('/api/v1/forecast/<produto>')
+@require_api_key
+def get_forecast_v1(produto):
+    """Get price forecast for a product."""
+    # Check if forecast module available
     try:
-        horizonte = request.args.get('horizonte', 30, type=int)
-        modelo = request.args.get('modelo', 'all')
-
-        # Validate horizon
-        horizonte = max(7, min(365, horizonte))
-
-        # Check if product exists
-        available = get_available_products()
-        if produto not in available:
+        from forecast import generate_forecast, get_available_products
+    except ImportError:
+        try:
+            from api.forecast import generate_forecast, get_available_products
+        except ImportError:
             return jsonify({
                 'success': False,
-                'error': f'Produto nao encontrado: {produto}',
-                'produtos_disponiveis': available[:10],
-            }), 404
+                'error': 'Forecast module not available'
+            }), 503
 
-        # Generate forecast
+    horizonte = request.args.get('horizonte', 30, type=int)
+    horizonte = max(7, min(365, horizonte))
+
+    # Check if product exists
+    available = get_available_products()
+    if produto not in available:
+        return jsonify({
+            'success': False,
+            'error': f'Product not found: {produto}',
+            'available_products': available[:10],
+        }), 404
+
+    try:
         result = generate_forecast(produto, horizonte)
-
-        # Filter by model if specified
-        if modelo != 'all' and modelo in result.get('modelos', {}):
-            result['modelos'] = {modelo: result['modelos'][modelo]}
-
         return jsonify(result)
-
     except Exception as e:
         logger.error(f"Forecast error for {produto}: {e}")
         return jsonify({
@@ -269,66 +856,44 @@ def get_forecast(produto):
         }), 500
 
 
-@app.route('/api/forecast/produtos')
-def get_forecast_products():
-    """Get list of products available for forecasting."""
-    if not HAS_FORECAST:
-        return jsonify({
-            'success': False,
-            'error': 'Modulo de previsao nao disponivel'
-        }), 503
+# ====================
+# SCHEDULING & INIT
+# ====================
+
+def run_pipeline():
+    """Run the complete ETL pipeline."""
+    logger.info("Starting ETL pipeline...")
 
     try:
-        products = get_available_products()
-        return jsonify({
-            'success': True,
-            'produtos': products,
-            'total': len(products),
-        })
-    except Exception as e:
-        logger.error(f"Error getting forecast products: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-# Serve static dashboard files
-@app.route('/dashboard')
-@app.route('/dashboard/<path:path>')
-def serve_dashboard(path='index.html'):
-    """Serve the React dashboard."""
-    dashboard_dir = BASE_DIR / "dashboard" / "dist"
-    if not dashboard_dir.exists():
-        return jsonify({'error': 'Dashboard not built'}), 404
-    return send_from_directory(dashboard_dir, path)
-
-
-def run_scraper():
-    """Run only the scraper."""
-    logger.info("Starting scraper...")
-    try:
+        from scraper import scrape_latest_quotations
         scrape_latest_quotations()
-        logger.info("Scraping completed")
     except Exception as e:
         logger.error(f"Scraping error: {e}")
 
+    try:
+        from etl_regional import process_all_files
+        process_all_files()
+    except Exception as e:
+        logger.error(f"ETL error: {e}")
+
+    try:
+        from preprocess_data import main as preprocess_main
+        preprocess_main()
+    except Exception as e:
+        logger.error(f"Preprocessing error: {e}")
+
+    # Clear cache
+    global _data_cache, _cache_timestamp
+    _data_cache = {}
+    _cache_timestamp = None
+
+    logger.info("Pipeline completed")
+
 
 def init_scheduler():
-    """Initialize the background scheduler for daily updates."""
+    """Initialize the background scheduler."""
     scheduler = BackgroundScheduler()
 
-    # Run scraper daily at 12:30 (Brasilia time)
-    scheduler.add_job(
-        run_scraper,
-        'cron',
-        hour=12,
-        minute=30,
-        timezone='America/Sao_Paulo',
-        id='daily_scraper'
-    )
-
-    # Run full pipeline daily at 13:00 (Brasilia time)
     scheduler.add_job(
         run_pipeline,
         'cron',
@@ -339,15 +904,13 @@ def init_scheduler():
     )
 
     scheduler.start()
-    logger.info("Scheduler started - scraping at 12:30, pipeline at 13:00 BRT")
+    logger.info("Scheduler started - pipeline at 13:00 BRT")
 
 
 if __name__ == '__main__':
-    # Initialize scheduler in production
     if os.environ.get('FLASK_ENV') == 'production':
         init_scheduler()
 
-    # Run initial pipeline if no data exists
     if not (JSON_DIR / 'aggregated.json').exists():
         logger.info("No data found, running initial pipeline...")
         run_pipeline()
