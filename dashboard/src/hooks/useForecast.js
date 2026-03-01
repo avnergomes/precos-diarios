@@ -73,26 +73,36 @@ export function useForecastProducts() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
+    const controller = new AbortController()
+    const { signal } = controller
+
     async function load() {
       try {
         const url = `${BASE}data/forecast_products.json`
-        const response = await fetch(url)
+        const response = await fetch(url, { signal })
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`)
         }
 
         const result = await response.json()
-        setProducts(result.produtos || [])
+        if (!signal.aborted) {
+          setProducts(result.produtos || [])
+        }
       } catch (err) {
-        console.error('Error loading forecast products:', err)
-        setError(err.message)
+        if (err.name !== 'AbortError') {
+          console.error('Error loading forecast products:', err)
+          setError(err.message)
+        }
       } finally {
-        setLoading(false)
+        if (!signal.aborted) {
+          setLoading(false)
+        }
       }
     }
 
     load()
+    return () => controller.abort()
   }, [])
 
   return { products, loading, error }
