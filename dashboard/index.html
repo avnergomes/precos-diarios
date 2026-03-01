@@ -122,7 +122,11 @@
             prefersColorScheme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
           };
 
-          var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyk8VzLygqFmid0cSB5Qge8yRKRV-hJNvWlCSZBPrOCnyJyTd21d-6mNRjyJ7NIr_-36Q/exec';
+          var SCRIPT_URL = '%VITE_TRACKING_URL%';
+          if (!SCRIPT_URL || SCRIPT_URL.includes('VITE_TRACKING_URL')) {
+            console.warn('[Tracking] URL não configurada — tracking desativado');
+            return;
+          }
 
           fetch(SCRIPT_URL, {
             method: 'POST',

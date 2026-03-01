@@ -49,6 +49,7 @@ jobs:
         run: npm run build
         env:
           VITE_APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
+          VITE_TRACKING_URL: ${{ secrets.TRACKING_URL }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
