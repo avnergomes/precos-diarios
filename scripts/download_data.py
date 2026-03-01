@@ -307,8 +307,8 @@ def download_all():
     print("=" * 60)
 
     if page_links:
-        print("\n[4/4] Downloading daily files (2025+)...")
-        download_daily_files(page_links, min_year=2025)
+        print(f"\n[4/4] Downloading daily files ({datetime.now().year}+)...")
+        download_daily_files(page_links)
 
 
 def parse_date_from_page(html: str) -> Optional[datetime]:
@@ -352,8 +352,10 @@ def extract_file_links(html: str, page_url: str) -> List[str]:
     return links
 
 
-def download_daily_files(page_links: List[str], min_year: int = 2025):
+def download_daily_files(page_links: List[str], min_year: int = None):
     """Download daily files for the given year range."""
+    if min_year is None:
+        min_year = datetime.now().year
     session = requests.Session()
     session.headers.update(HEADERS)
 

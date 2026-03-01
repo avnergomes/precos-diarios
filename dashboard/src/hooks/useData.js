@@ -12,6 +12,9 @@ export function useData() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
+    const controller = new AbortController()
+    const { signal } = controller
+
     async function loadData() {
       try {
         setLoading(true)
@@ -19,23 +22,25 @@ export function useData() {
 
         // Load core data files
         const [aggregated, detailed, timeseries, filters] = await Promise.all([
-          fetch(DATA_BASE_PATH + 'aggregated.json').then(r => {
+          fetch(DATA_BASE_PATH + 'aggregated.json', { signal }).then(r => {
             if (!r.ok) throw new Error('Failed to load aggregated.json')
             return r.json()
           }),
-          fetch(DATA_BASE_PATH + 'detailed.json').then(r => {
+          fetch(DATA_BASE_PATH + 'detailed.json', { signal }).then(r => {
             if (!r.ok) throw new Error('Failed to load detailed.json')
             return r.json()
           }),
-          fetch(DATA_BASE_PATH + 'timeseries.json').then(r => {
+          fetch(DATA_BASE_PATH + 'timeseries.json', { signal }).then(r => {
             if (!r.ok) throw new Error('Failed to load timeseries.json')
             return r.json()
           }),
-          fetch(DATA_BASE_PATH + 'filters.json').then(r => {
+          fetch(DATA_BASE_PATH + 'filters.json', { signal }).then(r => {
             if (!r.ok) throw new Error('Failed to load filters.json')
             return r.json()
           }),
         ])
+
+        if (signal.aborted) return
 
         // Try to load regional data (optional - may not exist)
         let regionalFilters = null
@@ -43,34 +48,45 @@ export function useData() {
 
         try {
           const [regFilters, regDetailed] = await Promise.all([
-            fetch(DATA_BASE_PATH + 'regional_filters.json').then(r => r.ok ? r.json() : null),
-            fetch(DATA_BASE_PATH + 'detailed_regional.json').then(r => r.ok ? r.json() : null),
+            fetch(DATA_BASE_PATH + 'regional_filters.json', { signal }).then(r => r.ok ? r.json() : null),
+            fetch(DATA_BASE_PATH + 'detailed_regional.json', { signal }).then(r => r.ok ? r.json() : null),
           ])
           regionalFilters = regFilters
           detailedRegional = regDetailed
         } catch (err) {
-          console.warn('Regional data not available:', err)
+          if (err.name !== 'AbortError') {
+            console.warn('Regional data not available:', err)
+          }
         }
+
+        if (signal.aborted) return
 
         const normalizedFilters = normalizeFilters(filters, aggregated, detailed, regionalFilters)
 
-        setData({
-          aggregated,
-          detailed,
-          detailedRegional,
-          timeseries,
-          filters: normalizedFilters,
-          hasRegionalData: !!detailedRegional?.records?.length,
-        })
+        if (!signal.aborted) {
+          setData({
+            aggregated,
+            detailed,
+            detailedRegional,
+            timeseries,
+            filters: normalizedFilters,
+            hasRegionalData: !!detailedRegional?.records?.length,
+          })
+        }
       } catch (err) {
-        console.error('Error loading data:', err)
-        setError(err.message)
+        if (err.name !== 'AbortError' && !signal.aborted) {
+          console.error('Error loading data:', err)
+          setError(err.message)
+        }
       } finally {
-        setLoading(false)
+        if (!signal.aborted) {
+          setLoading(false)
+        }
       }
     }
 
     loadData()
+    return () => controller.abort()
   }, [])
 
   return { data, loading, error }

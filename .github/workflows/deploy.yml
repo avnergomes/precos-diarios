@@ -30,9 +30,6 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
-      - name: Generate forecasts
-        run: python scripts/generate_forecasts.py
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
