@@ -3,12 +3,19 @@ import { Filter, RotateCcw, Search, X, ChevronDown, ChevronUp, MapPin } from 'lu
 import { formatCategoryName } from '../utils/format'
 
 export default function Filters({ filters, setFilters, options, metadata, hasRegionalData }) {
-  const anos = options?.anos || []
+  let anos = options?.anos || []
   const categorias = options?.categorias || []
   const produtos = options?.produtos || []
   const regionais = options?.regionais || []
   const categoryProducts = options?.category_products || {}
   const regionalProducts = options?.regional_products || {}
+  const regionalAnos = options?.regional_anos || {}
+
+  // When a regional filter is active, restrict years to those with actual data
+  if (filters.regional && regionalAnos[filters.regional]) {
+    const regionalYears = new Set(regionalAnos[filters.regional])
+    anos = anos.filter(y => regionalYears.has(y))
+  }
 
   const [searchTerm, setSearchTerm] = useState('')
   const [showAllProducts, setShowAllProducts] = useState(false)
@@ -87,12 +94,15 @@ export default function Filters({ filters, setFilters, options, metadata, hasReg
   const displayedProducts = showAllProducts ? filteredProducts : filteredProducts.slice(0, 8)
   const displayedRegionais = showAllRegionais ? regionais : regionais.slice(0, 10)
 
-  // Year presets
+  // Year presets - guard against empty anos array
+  const maxYear = anos.length > 0 ? Math.max(...anos) : null
   const yearPresets = [
     { label: 'Todos', min: null, max: null },
-    { label: 'Ultimo ano', min: Math.max(...anos), max: Math.max(...anos) },
-    { label: '5 anos', min: Math.max(...anos) - 4, max: Math.max(...anos) },
-    { label: '10 anos', min: Math.max(...anos) - 9, max: Math.max(...anos) },
+    ...(maxYear !== null ? [
+      { label: 'Ultimo ano', min: maxYear, max: maxYear },
+      { label: '5 anos', min: maxYear - 4, max: maxYear },
+      { label: '10 anos', min: maxYear - 9, max: maxYear },
+    ] : []),
   ]
 
   const isPresetActive = (preset) => {

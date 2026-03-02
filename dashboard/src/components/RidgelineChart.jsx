@@ -26,7 +26,9 @@ export default function RidgelineChart({
       byYear[year].push(info.media || info)
     })
 
-    const years = Object.keys(byYear).filter(y => byYear[y].length >= 6).sort()
+    const allYears = Object.keys(byYear)
+    const years = allYears.filter(y => byYear[y].length >= 6).sort()
+    const excludedYearsCount = allYears.length - years.length
     if (years.length === 0) return null
 
     // Calculate global min/max for consistent scale
@@ -48,7 +50,7 @@ export default function RidgelineChart({
       colorIdx: Math.floor((idx / (years.length - 1)) * (YEAR_COLORS.length - 1))
     }))
 
-    return { densities, minVal, maxVal, years }
+    return { densities, minVal, maxVal, years, excludedYearsCount }
   }, [data])
 
   if (!chartData) {
@@ -65,7 +67,7 @@ export default function RidgelineChart({
   const innerWidth = width - MARGIN.left - MARGIN.right
   const innerHeight = height - MARGIN.top - MARGIN.bottom
 
-  const { densities, minVal, maxVal, years } = chartData
+  const { densities, minVal, maxVal, years, excludedYearsCount } = chartData
 
   // Find max density for scaling
   const maxDensity = d3.max(densities.flatMap(d => d.density.map(p => p[1])))
@@ -240,6 +242,13 @@ export default function RidgelineChart({
           <span className="text-xs text-slate-400">antigo → recente</span>
         </div>
       </div>
+
+      {/* Note about excluded years */}
+      {excludedYearsCount > 0 && (
+        <p className="text-xs text-slate-400 mt-2">
+          {excludedYearsCount} ano(s) excluído(s) por terem menos de 6 meses de dados.
+        </p>
+      )}
     </div>
   )
 }

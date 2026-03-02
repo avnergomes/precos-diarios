@@ -45,28 +45,37 @@ REGIONAIS_PADRAO = [
 REGIONAL_ALIASES = {
     'apucarana': 'Apucarana',
     'c.mourao': 'Campo Mourão', 'campo mourao': 'Campo Mourão', 'c. mourão': 'Campo Mourão',
+    'c mourao': 'Campo Mourão', 'campo mourão': 'Campo Mourão', 'cm': 'Campo Mourão',
     'cascavel': 'Cascavel',
     'cianorte': 'Cianorte',
     'c.procopio': 'Cornélio Procópio', 'cornelio procopio': 'Cornélio Procópio', 'c. procópio': 'Cornélio Procópio',
+    'c procopio': 'Cornélio Procópio',
     'curitiba': 'Curitiba',
-    'dois vizinhos': 'Dois Vizinhos', 'd.vizinhos': 'Dois Vizinhos',
+    'dois vizinhos': 'Dois Vizinhos', 'd.vizinhos': 'Dois Vizinhos', 'd vizinhos': 'Dois Vizinhos',
     'f.beltrao': 'Francisco Beltrão', 'francisco beltrao': 'Francisco Beltrão', 'f. beltrão': 'Francisco Beltrão',
+    'f beltrao': 'Francisco Beltrão',
     'guarapuava': 'Guarapuava',
     'irati': 'Irati',
     'ivaipora': 'Ivaiporã', 'ivaiporã': 'Ivaiporã',
     'laranjeiras': 'Laranjeiras do Sul', 'laranjeiras do sul': 'Laranjeiras do Sul', 'l. sul': 'Laranjeiras do Sul',
+    'l sul': 'Laranjeiras do Sul', 'l.sul': 'Laranjeiras do Sul',
     'londrina': 'Londrina',
     'maringa': 'Maringá', 'maringá': 'Maringá',
     'paranagua': 'Paranaguá', 'paranaguá': 'Paranaguá',
     'paranavai': 'Paranavaí', 'paranavaí': 'Paranavaí',
     'p.branco': 'Pato Branco', 'pato branco': 'Pato Branco', 'p. branco': 'Pato Branco',
+    'p branco': 'Pato Branco',
     'pitanga': 'Pitanga',
     'p.grossa': 'Ponta Grossa', 'ponta grossa': 'Ponta Grossa', 'p. grossa': 'Ponta Grossa',
+    'pg': 'Ponta Grossa', 'pta grossa': 'Ponta Grossa', 'pont. grossa': 'Ponta Grossa',
+    'ponta-grossa': 'Ponta Grossa', 'pta. grossa': 'Ponta Grossa',
     's.a.platina': 'Santo Antônio da Platina', 'sto antonio': 'Santo Antônio da Platina',
     's.a. platina': 'Santo Antônio da Platina', 'santo antonio da platina': 'Santo Antônio da Platina',
+    'sa platina': 'Santo Antônio da Platina', 'sap': 'Santo Antônio da Platina',
     'toledo': 'Toledo',
     'umuarama': 'Umuarama',
     'u.vitoria': 'União da Vitória', 'uniao da vitoria': 'União da Vitória', 'u. vitória': 'União da Vitória',
+    'u vitoria': 'União da Vitória',
 }
 
 # Category mappings
@@ -137,18 +146,19 @@ def normalize_regional(name: str) -> Optional[str]:
     if name_clean in REGIONAL_ALIASES:
         return REGIONAL_ALIASES[name_clean]
 
-    # Try partial match
-    for alias, standard in REGIONAL_ALIASES.items():
-        if alias in name_clean or name_clean in alias:
-            return standard
+    # Try partial match - require minimum length to avoid false positives
+    if len(name_clean) >= 5:
+        for alias, standard in REGIONAL_ALIASES.items():
+            if alias in name_clean or name_clean in alias:
+                return standard
 
-    # Try matching against standard list (fuzzy)
-    for standard in REGIONAIS_PADRAO:
-        standard_lower = standard.lower()
-        standard_norm = unicodedata.normalize('NFKD', standard_lower)
-        standard_norm = ''.join(c for c in standard_norm if not unicodedata.combining(c))
-        if standard_norm in name_clean or name_clean in standard_norm:
-            return standard
+        # Try matching against standard list (fuzzy)
+        for standard in REGIONAIS_PADRAO:
+            standard_lower = standard.lower()
+            standard_norm = unicodedata.normalize('NFKD', standard_lower)
+            standard_norm = ''.join(c for c in standard_norm if not unicodedata.combining(c))
+            if standard_norm in name_clean or name_clean in standard_norm:
+                return standard
 
     return None
 
@@ -227,24 +237,33 @@ def extract_regional_headers(df: pd.DataFrame) -> Dict[int, str]:
     """Extract regional names from Excel header rows."""
     regional_cols = {}
 
-    # Look in first 5 rows for regional headers
-    for row_idx in range(min(5, len(df))):
+    # Scan first 10 rows (was 5) and ALL columns (was max 25)
+    for row_idx in range(min(10, len(df))):
         row = df.iloc[row_idx]
 
-        for col_idx in range(2, min(len(row), 25)):
+        for col_idx in range(2, len(row)):  # Removed the min(len(row), 25) cap
             cell = row.iloc[col_idx]
             if pd.notna(cell):
                 cell_str = str(cell).strip()
+                # Skip numeric cells, short strings, and known non-regional values
+                if len(cell_str) < 3:
+                    continue
+                try:
+                    float(cell_str.replace(',', '.'))
+                    continue  # It's a number, skip
+                except ValueError:
+                    pass
                 regional = normalize_regional(cell_str)
                 if regional and col_idx not in regional_cols:
                     regional_cols[col_idx] = regional
 
-    # If no headers found, use column index as fallback
+    # If no headers found, use default order but ONLY for columns that exist
     if not regional_cols:
-        # Default column order based on common SIMA structure
-        default_order = REGIONAIS_PADRAO[:20]
+        default_order = REGIONAIS_PADRAO[:min(20, max(0, len(df.columns) - 2))]
         for i, reg in enumerate(default_order):
-            regional_cols[i + 2] = reg
+            col = i + 2
+            if col < len(df.columns):
+                regional_cols[col] = reg
 
     return regional_cols
 
@@ -341,7 +360,25 @@ def normalize_product_name(name: str) -> Optional[str]:
     if not name:
         return None
 
+    # Clean trailing punctuation artifacts from Excel parsing
+    name = re.sub(r'\s*[,\.]+\s*$', '', name)
+    name = name.strip()
+
     product_map = {
+        # Bare product names (must come BEFORE more specific patterns)
+        r'(?i)^soja\s*$': 'Soja industrial tipo 1',
+        r'(?i)^boi\s*$': 'Boi em pé',
+        r'(?i)^vaca\s*$': 'Vaca em pé',
+        r'(?i)^caf[eé]\s*$': 'Café em coco',
+        r'(?i)^frango\s*$': 'Frango de corte',
+        r'(?i)^trigo\s*$': 'Trigo pão',
+        r'(?i)^milho\s*comum\s*$': 'Milho amarelo tipo 1',
+        r'(?i)^milhocomum\s*$': 'Milho amarelo tipo 1',
+        r'(?i)^feij.o\s*de\s*cor\s*$': 'Feijão de cor tipo 1',
+        r'(?i)^feij.odecor\s*$': 'Feijão de cor tipo 1',
+        r'(?i)^arroz\s*em\s*casca\s*$': 'Arroz em casca tipo 1',
+        r'(?i)^arrozemcasca\s*$': 'Arroz em casca tipo 1',
+        # Specific patterns
         r'(?i)soja\s*industrial': 'Soja industrial tipo 1',
         r'(?i)milho\s*amarelo': 'Milho amarelo tipo 1',
         r'(?i)milho.*tipo\s*1': 'Milho amarelo tipo 1',
@@ -471,6 +508,59 @@ def process_sheet_regional(df: pd.DataFrame, date: datetime, filename: str) -> L
     return records
 
 
+def extract_date_from_filename(filename: str, sheet_name: str = '') -> Optional[datetime]:
+    """Extract date from filename patterns used in SIMA archives."""
+    month_names = {
+        'janeiro': 1, 'fevereiro': 2, 'marco': 3, 'março': 3, 'abril': 4,
+        'maio': 5, 'junho': 6, 'julho': 7, 'agosto': 8,
+        'setembro': 9, 'outubro': 10, 'novembro': 11, 'dezembro': 12,
+        'jan': 1, 'fev': 2, 'mar': 3, 'abr': 4, 'mai': 5, 'jun': 6,
+        'jul': 7, 'ago': 8, 'set': 9, 'out': 10, 'nov': 11, 'dez': 12,
+    }
+
+    fn_lower = filename.lower().strip()
+
+    # Pattern 1: "Abril 2017", "Janeiro 2018", "Marco 2017"
+    for name, num in month_names.items():
+        match = re.search(rf'{name}\s*((?:19|20)\d{{2}})', fn_lower)
+        if match:
+            year = int(match.group(1))
+            day = int(sheet_name) if re.match(r'^\d{1,2}$', sheet_name.strip()) else 1
+            day = min(max(day, 1), 28)  # Safety clamp
+            try:
+                return datetime(year, num, day)
+            except ValueError:
+                return datetime(year, num, 1)
+
+    # Pattern 2: "Resumo Sima_MMYY" or "Resumo SIMA_MMYY" or "Resumo_MMYY"
+    match = re.search(r'[_\s](\d{2})[\s_]?(\d{2})(?:\s|$|\.)', fn_lower)
+    if match:
+        mm, yy = int(match.group(1)), int(match.group(2))
+        if 1 <= mm <= 12 and 0 <= yy <= 99:
+            year = 2000 + yy if yy < 50 else 1900 + yy
+            day = int(sheet_name) if re.match(r'^\d{1,2}$', sheet_name.strip()) else 1
+            day = min(max(day, 1), 28)
+            try:
+                return datetime(year, mm, day)
+            except ValueError:
+                return datetime(year, mm, 1)
+
+    # Pattern 3: "ResumoSIMA_Ago01" (abbreviated month + YY)
+    for name, num in month_names.items():
+        match = re.search(rf'{name}\s*(\d{{2}})(?:\s|$|\.)', fn_lower)
+        if match:
+            yy = int(match.group(1))
+            year = 2000 + yy if yy < 50 else 1900 + yy
+            day = int(sheet_name) if re.match(r'^\d{1,2}$', sheet_name.strip()) else 1
+            day = min(max(day, 1), 28)
+            try:
+                return datetime(year, num, day)
+            except ValueError:
+                return datetime(year, num, 1)
+
+    return None
+
+
 def process_excel_file(filepath: Path) -> List[dict]:
     """Process a single Excel file with multiple sheets."""
     all_records = []
@@ -481,6 +571,13 @@ def process_excel_file(filepath: Path) -> List[dict]:
 
         for sheet_name in xl.sheet_names:
             date = parse_date_from_sheet(sheet_name, filepath.stem)
+
+            if not date:
+                # Try to extract month/year from filename patterns like:
+                # "Resumo Sima_0107" (MMYY), "Resumo SIMA_0105" (MMYY),
+                # "Resumo_0102" (MMYY), "ResumoSIMA_Ago01" (MonYY),
+                # "Abril 2017" (Month Year), "Janeiro 2018" (Month Year)
+                date = extract_date_from_filename(filepath.stem, sheet_name)
 
             if not date:
                 year_match = re.search(r'(19|20)\d{2}', filepath.stem)
@@ -531,14 +628,14 @@ def process_all_files():
 
     if DATA_EXTRACTED_DIR.exists():
         for pattern in excel_patterns:
-            excel_files.extend(DATA_EXTRACTED_DIR.glob(pattern))
+            excel_files.extend(DATA_EXTRACTED_DIR.rglob(pattern))  # Changed from .glob() to .rglob()
 
     daily_dir = DATA_EXTRACTED_DIR / "daily"
     if daily_dir.exists():
         for pattern in excel_patterns:
-            excel_files.extend(daily_dir.glob(pattern))
+            excel_files.extend(daily_dir.glob(pattern))  # Keep non-recursive for daily/
 
-    excel_files = sorted(excel_files)
+    excel_files = sorted(set(excel_files))  # Deduplicate after collecting
     logger.info(f"Found {len(excel_files)} Excel files to process")
 
     all_records = []

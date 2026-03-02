@@ -145,6 +145,7 @@ function normalizeFilters(filtersJson, aggregated, detailed, regionalFilters) {
     regionais: regionais.sort((a, b) => a.localeCompare(b)),
     category_products: categoryProducts,
     regional_products: regionalFilters?.regional_products || {},
+    regional_anos: regionalFilters?.regional_anos || {},
   }
 }
 

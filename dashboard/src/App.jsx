@@ -141,6 +141,16 @@ function App() {
           {filterSummary}
         </div>
 
+        {/* Global No Data Banner */}
+        {filteredData.length === 0 && (filters.produto || filters.categoria || filters.regional || filters.anoMin || filters.anoMax) && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-sm">
+            <strong>Nenhum dado encontrado</strong> para a combinação de filtros selecionada.
+            {filters.regional && (
+              <span> Nem todas as regionais possuem dados para todos os anos — tente ajustar o período ou a regional.</span>
+            )}
+          </div>
+        )}
+
         {/* KPIs Section */}
         <section id="kpis">
           <KpiCards aggregations={aggregations} contextLabel={contextLabel} />

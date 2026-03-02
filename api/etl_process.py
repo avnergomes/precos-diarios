@@ -638,15 +638,15 @@ def process_all_files():
     excel_files = []
     if DATA_EXTRACTED_DIR.exists():
         for pattern in excel_patterns:
-            excel_files.extend(DATA_EXTRACTED_DIR.glob(pattern))
+            excel_files.extend(DATA_EXTRACTED_DIR.rglob(pattern))  # Changed from .glob() to .rglob()
 
     # Also include daily files downloaded by the scraper
     daily_dir = DATA_EXTRACTED_DIR / "daily"
     if daily_dir.exists():
         for pattern in excel_patterns:
-            excel_files.extend(daily_dir.glob(pattern))
+            excel_files.extend(daily_dir.glob(pattern))  # Keep non-recursive for daily/
 
-    excel_files = sorted(excel_files)
+    excel_files = sorted(set(excel_files))  # Deduplicate after collecting
     logger.info(f"Found {len(excel_files)} Excel files to process")
 
     all_records = []

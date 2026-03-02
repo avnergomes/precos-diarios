@@ -89,6 +89,11 @@ def load_data(regional: bool = False) -> pd.DataFrame:
     df[price_col] = pd.to_numeric(df[price_col], errors='coerce')
 
     df = df[df[price_col].notna() & (df[price_col] > 0)]
+
+    # Log and drop records with missing year (indicates ETL date parsing failure)
+    missing_year = df['ano'].isna().sum()
+    if missing_year > 0:
+        logger.warning(f"Dropping {missing_year} records with missing year (ETL date parse failure)")
     df = df[df['ano'].notna()]
 
     # Normalize price column name
@@ -435,8 +440,26 @@ def generate_detailed_regional_data(df: pd.DataFrame) -> dict:
         logger.warning("No regional column found - skipping detailed regional data")
         return {'records': [], 'generated_at': datetime.now().isoformat()}
 
-    # Sample for large datasets
-    sample_df = df.sample(n=min(100000, len(df)), random_state=42) if len(df) > 100000 else df
+    # Use stratified sampling to guarantee representation of all (regional, ano) combos
+    MAX_RECORDS = 200000  # Increased from 100k — ~20MB JSON is acceptable for static asset
+    if len(df) > MAX_RECORDS:
+        # Stratified sample by (regional, ano) to preserve all combinations
+        strata = df.groupby(['regional', 'ano'], group_keys=False)
+        # Calculate proportional sample size per stratum, minimum 1
+        strata_sizes = strata.size()
+        total = strata_sizes.sum()
+        target_sizes = (strata_sizes / total * MAX_RECORDS).clip(lower=1).astype(int)
+
+        sampled_parts = []
+        for (reg, ano), size in target_sizes.items():
+            stratum_df = df[(df['regional'] == reg) & (df['ano'] == ano)]
+            n = min(size, len(stratum_df))
+            sampled_parts.append(stratum_df.sample(n=n, random_state=42))
+
+        sample_df = pd.concat(sampled_parts, ignore_index=True)
+        logger.info(f"Stratified sample: {len(sample_df)} records from {len(df)} (preserving all regional-year combos)")
+    else:
+        sample_df = df
 
     records = []
     for _, row in sample_df.iterrows():

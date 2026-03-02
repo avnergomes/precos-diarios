@@ -195,15 +195,19 @@ def main():
             return False
 
     # Step 3: Preprocess
+    preprocess_success = False
     try:
         step_preprocess()
+        preprocess_success = True
     except Exception as e:
         logger.error(f"Preprocessing failed: {e}")
         return False
 
     # Step 4: Copy JSONs
+    copy_success = False
     try:
         step_copy_json()
+        copy_success = True
     except Exception as e:
         logger.error(f"Copy failed: {e}")
 
@@ -214,8 +218,8 @@ def main():
         logger.error(f"Forecast generation failed: {e}")
         # Non-fatal: dashboard still works without new forecasts
 
-    # Clean up downloaded Excel files (they're gitignored anyway)
-    if DAILY_DIR.exists():
+    # Only delete Excel files AFTER confirmed successful processing
+    if has_new_data and preprocess_success and copy_success and DAILY_DIR.exists():
         for f in new_files:
             if f.exists():
                 f.unlink()
