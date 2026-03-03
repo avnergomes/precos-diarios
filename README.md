@@ -1,183 +1,103 @@
-# Cotacoes Diarias SIMA
+# Preços Diários — Cotações Agrícolas do Paraná
 
-Dashboard interativo para visualizacao de precos diarios de produtos agricolas no estado do Parana, Brasil.
+Dashboard de cotações diárias de preços agrícolas do Paraná, com séries históricas de 2003 a 2026 e previsões geradas por machine learning. Cobre 22 produtos monitorados pelo SIMA/SEAB.
+
+**🔗 [Acessar dashboard](https://avnergomes.github.io/precos-diarios/)**
+
+Parte do ecossistema **[Datageo Paraná](https://datageoparana.github.io)**.
 
 ## Sobre
 
-Este projeto coleta, processa e visualiza dados do **SIMA (Sistema de Informacao de Mercado Agricola)** da Secretaria de Estado da Agricultura e do Abastecimento do Parana (SEAB).
+O Sistema de Informação de Mercado Agrícola (SIMA) da SEAB coleta cotações diárias de produtos agropecuários em diversas praças do Paraná. Este dashboard consolida mais de duas décadas de preços, tornando acessível a análise de tendências, sazonalidade e variações de mercado para produtores, pesquisadores e gestores públicos.
 
-### Dados Disponiveis
+Além da série histórica, o dashboard incorpora previsões de curto prazo geradas por modelos de machine learning, heatmap de sazonalidade mensal e sparklines de variação recente por produto. Uma API própria permite a consulta programática dos dados.
 
-- **Periodo**: 2003 - 2025+
-- **Produtos**: Graos, hortalicas, frutas, pecuaria, insumos e produtos florestais
-- **Regionais**: 23 nucleos regionais IDR do Parana
-- **Fonte**: DERAL/SEAB-PR
-- **Atualizacao**: Diaria (automatica via Render)
+O pipeline de dados é composto por múltiplos scripts Python que fazem o download, a limpeza e a geração de previsões, com execução automatizada via GitHub Actions.
+
+## Fonte de Dados
+
+- **SIMA/SEAB** — Sistema de Informação de Mercado Agrícola da Secretaria da Agricultura e do Abastecimento do Paraná
+- Período: 2003–2026
+- Atualização: diária (workflow automatizado)
+
+## Tecnologias
+
+| Camada | Tecnologia |
+|--------|-----------|
+| Frontend | React 18, Vite 5, Tailwind CSS 3 |
+| Gráficos | Recharts, D3.js |
+| Mapas | — |
+| Pipeline | Python (Pandas, machine learning) |
+| Deploy | GitHub Pages via GitHub Actions |
+| Tracking | LGPD-compliant (19 métricas anônimas) |
 
 ## Estrutura do Projeto
 
 ```
 precos-diarios/
-├── api/                        # API Flask para servir dados
-│   ├── app.py                  # Servidor Flask com endpoints
-│   ├── scraper.py              # Web scraper para cotacoes diarias
-│   ├── etl_process.py          # Processamento dos dados
-│   └── preprocess_data.py      # Geracao dos JSONs
-├── scripts/                    # Scripts Python auxiliares
-│   ├── download_data.py        # Download dos arquivos historicos
-│   └── run_pipeline.py         # Pipeline completo local
-├── dashboard/                  # Frontend React + Vite
+├── dashboard/          # Aplicação React
 │   ├── src/
-│   │   ├── components/         # Componentes React
-│   │   ├── hooks/              # Custom hooks
-│   │   └── utils/              # Funcoes utilitarias
-│   └── public/
-│       ├── data/               # Dados processados (JSON)
-│       └── assets/             # GeoJSON dos municipios PR
-├── data/
-│   ├── raw/                    # Arquivos baixados (ZIP/RAR)
-│   ├── extracted/              # Planilhas extraidas
-│   ├── scraped/                # Dados do web scraper
-│   ├── processed/              # CSV consolidado
-│   └── json/                   # JSONs para a API
-├── render.yaml                 # Configuracao Render
-├── Procfile                    # Comando para Gunicorn
-├── links.txt                   # URLs das fontes de dados
-└── requirements.txt            # Dependencias Python
+│   │   ├── App.jsx
+│   │   ├── components/ # 20 componentes
+│   │   └── hooks/      # useData.js, useForecast.js
+│   ├── public/
+│   │   └── data/       # JSONs processados
+│   └── index.html
+├── scripts/            # Pipeline de dados (Python)
+│   ├── download_data.py
+│   ├── etl_process.py
+│   ├── preprocess_data.py
+│   ├── generate_forecasts.py
+│   ├── run_pipeline.py
+│   ├── update_data.py
+│   └── backfill_2025.py
+├── api/                # Backend de API
+│   ├── app.py
+│   ├── scraper.py
+│   ├── forecast.py
+│   └── etl_process.py
+├── .github/workflows/  # CI/CD
+│   ├── data-pipeline.yml
+│   ├── deploy.yml
+│   ├── forecast.yml
+│   ├── lighthouse.yml
+│   ├── link-check.yml
+│   └── seo-check.yml
+└── README.md
 ```
 
-## Deploy no Render
+## Funcionalidades
 
-### Configuracao Automatica
-
-1. Faca fork deste repositorio
-2. Crie uma conta no [Render](https://render.com)
-3. Clique em "New" > "Blueprint"
-4. Conecte seu repositorio GitHub
-5. O Render ira criar automaticamente:
-   - **API**: `precos-diarios-api` (Python/Flask)
-   - **Dashboard**: `precos-diarios-dashboard` (Static Site)
-   - **Cron Job**: Atualizacao diaria as 8h (horario de Brasilia)
-
-### URLs de Producao
-
-- Dashboard: `https://precos-diarios-dashboard.onrender.com`
-- API: `https://precos-diarios-api.onrender.com`
-
-### Endpoints da API
-
-| Endpoint | Descricao |
-|----------|-----------|
-| `GET /` | Health check e lista de endpoints |
-| `GET /api/status` | Status dos arquivos de dados |
-| `GET /api/data/aggregated.json` | Dados agregados |
-| `GET /api/data/timeseries.json` | Series temporais |
-| `GET /api/data/detailed.json` | Registros detalhados |
-| `GET /api/data/filters.json` | Opcoes de filtros |
-| `POST /api/refresh` | Atualiza dados (protegido) |
+- Séries históricas diárias de 22 produtos agrícolas (2003–2026)
+- Previsões de curto prazo com machine learning
+- Heatmap de sazonalidade mensal por produto
+- Sparklines de variação recente
+- Painel de últimos preços registrados
+- Filtros por produto, período e categoria
+- API para consulta programática dos dados
+- KPIs de preço médio, variação anual, total de registros e produtos monitorados
 
 ## Desenvolvimento Local
 
-### 1. Instalacao
-
 ```bash
-# Clone o repositorio
-git clone https://github.com/idr-pr/precos-diarios.git
-cd precos-diarios
+# Clone
+git clone https://github.com/avnergomes/precos-diarios.git
+cd precos-diarios/dashboard
 
-# Instale as dependencias Python
-pip install -r requirements.txt
-
-# Instale as dependencias do dashboard
-cd dashboard
+# Instalar dependências
 npm install
-```
 
-### 2. Pipeline Completo
-
-```bash
-# Roda download, ETL e preprocessing
-python scripts/run_pipeline.py
-```
-
-Ou execute cada etapa separadamente:
-
-```bash
-# Download dos arquivos historicos
-python scripts/download_data.py
-
-# Web scraping das cotacoes recentes
-python api/scraper.py
-
-# Processamento ETL (Excel -> CSV)
-python api/etl_process.py
-
-# Geracao dos JSONs para o dashboard
-python api/preprocess_data.py
-```
-
-### 3. Executar Localmente
-
-**Dashboard (com dados locais):**
-```bash
-cd dashboard
+# Rodar em desenvolvimento
 npm run dev
-```
-Acesse http://localhost:5173/precos-diarios/
 
-**API (Flask):**
-```bash
-python -m api.app
-```
-Acesse http://localhost:5000
-
-### 4. Build para Producao
-
-```bash
-cd dashboard
+# Build para produção
 npm run build
 ```
 
-## Tecnologias
+## Pipeline de Dados
 
-### Backend (API + ETL)
-- Python 3.12
-- Flask + Flask-CORS
-- APScheduler (cron jobs)
-- Pandas, OpenPyXL, xlrd
-- BeautifulSoup4 (web scraping)
-- Gunicorn (producao)
+O pipeline em `scripts/` opera em etapas: `download_data.py` coleta os dados brutos do SIMA, `etl_process.py` realiza a limpeza e transformação, `preprocess_data.py` gera os agregados e `generate_forecasts.py` produz as previsões por produto. O orquestrador `run_pipeline.py` encadeia todas as etapas. Os JSONs resultantes (`aggregated.json`, `daily_series.json`, `detailed.json`, `detailed_regional.json`, `filters.json`, `forecast_products.json` e `forecasts/*.json`) são gravados em `dashboard/public/data/`. Os workflows `data-pipeline.yml` e `forecast.yml` automatizam a execução no GitHub Actions.
 
-### Frontend (Dashboard)
-- React 18
-- Vite 5
-- Tailwind CSS 3
-- Recharts
-- Lucide React
+## Licença
 
-### Infraestrutura
-- Render (hosting)
-- GitHub Actions (CI/CD opcional)
-
-## Regionais IDR do Parana
-
-O sistema cobre as 23 regionais do IDR-Parana:
-
-| Mesorregiao | Regionais |
-|-------------|-----------|
-| Noroeste | Cianorte, Umuarama, Paranavai |
-| Norte | Londrina, Maringa, Apucarana, Cornelio Procopio, Santo Antonio da Platina, Ivaipora |
-| Centro | Campo Mourao, Pitanga |
-| Centro Sul | Guarapuava, Laranjeiras do Sul, Irati, Uniao da Vitoria |
-| Metropolitana e Litoral | Curitiba, Paranagua, Ponta Grossa |
-| Oeste | Cascavel, Toledo |
-| Sudoeste | Francisco Beltrao, Pato Branco, Dois Vizinhos |
-
-## Fontes de Dados
-
-- [SEAB-PR](https://www.agricultura.pr.gov.br) - Secretaria de Agricultura
-- [IDR-Parana](https://www.idrparana.pr.gov.br) - Instituto de Desenvolvimento Rural
-
-## Licenca
-
-Dados abertos do governo do estado do Parana.
+Dados públicos. Dashboard desenvolvido por [Avner Gomes](https://avnergomes.github.io/portfolio/).
