@@ -341,8 +341,9 @@ def extract_regional_headers(df: pd.DataFrame) -> Dict[int, str]:
 
     # Maximum column index for regional data (exclusive)
     # ERA 0/1/2: 18 regionais in cols 2-19, so max_col = 20
-    # ERA 3/4: 19 regionais in cols 2-20, so max_col = 21
-    max_regional_col = 21  # Conservative upper bound
+    # ERA 3/4: 20 regionais in cols 2-21, so max_col = 22
+    # FIX v4: União da Vitória is in col 21, so must include it
+    max_regional_col = 22  # Include col 21 (União da Vitória)
 
     # Non-regional strings to skip
     SKIP_STRINGS = {
@@ -547,14 +548,15 @@ def extract_date_from_filename(filename: str, sheet_name: str = '') -> Optional[
         if 1 <= d <= 31:
             day = d
 
-    # Pattern 1: Month name + 4-digit year (e.g., "Abril 2017", "Janeiro2019", "Sima Janeiro 2009")
+    # Pattern 1: Month name + 4-digit year (e.g., "Abril 2017", "Janeiro2019", "Janeiro_2012", "Sima Janeiro 2009")
     for name, num in sorted(month_names.items(), key=lambda x: -len(x[0])):
         # Normalize month name
         name_norm = unicodedata.normalize('NFKD', name)
         name_norm = ''.join(c for c in name_norm if not unicodedata.combining(c))
 
         for variant in set([name, name_norm]):
-            match = re.search(rf'{variant}\s*((?:19|20)\d{{2}})', fn_norm)
+            # FIX v4: Allow underscore between month and year (e.g., "Janeiro_2012")
+            match = re.search(rf'{variant}[_\s]*((?:19|20)\d{{2}})', fn_norm)
             if match:
                 year = int(match.group(1))
                 d = day if day else 1
@@ -742,6 +744,13 @@ def normalize_product_name(name: str) -> Optional[str]:
         (r'(?i)^feij[aã]odecor$', 'Feijão de cor tipo 1'),
         (r'(?i)^arrozemcasca$', 'Arroz em casca tipo 1'),
 
+        # === TYPOS AND VARIANTS (FIX v4) ===
+        (r'(?i)caf[eé]\s*beneficado', 'Café beneficiado'),  # typo Beneficado → Beneficiado
+        (r'(?i)feij[aã]o\s*carioca\s*tipo\s*1\s*[,.]?\s*(?:sc|Sc)\s*\d+', 'Feijão carioca tipo 1'),  # unidade grudada
+        (r'(?i)feij[aã]o\s*carioca\s*tipo\s*1', 'Feijão carioca tipo 1'),  # normalizar casing
+        (r'(?i)^feij[aã]o\s*carioca\s*$', 'Feijão carioca tipo 1'),  # nome incompleto
+        (r'(?i)arroz\s*agulhinha\s*em\s*casca.*', 'Arroz em casca tipo 1'),  # normalizar variação agulhinha
+
         # === FULL CANONICAL PATTERNS ===
         (r'(?i)soja\s*industrial', 'Soja industrial tipo 1'),
         (r'(?i)boi\s*em\s*p[eé]', 'Boi em pé'),
@@ -897,6 +906,10 @@ def process_sheet_regional(df: pd.DataFrame, date: datetime, filename: str) -> L
 def process_excel_file(filepath: Path) -> List[dict]:
     """Process a single Excel file with multiple sheets."""
     all_records = []
+
+    # FIX v4: Ensure filepath is a Path object (accept both str and Path)
+    if isinstance(filepath, str):
+        filepath = Path(filepath)
 
     try:
         engine = 'xlrd' if filepath.suffix == '.xls' else 'openpyxl'
