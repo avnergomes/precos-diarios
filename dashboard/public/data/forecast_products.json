@@ -1,7 +1,18 @@
 {
-  "gerado_em": "2026-03-02T16:36:59.179245",
-  "total": 18,
+  "gerado_em": "2026-03-03T16:15:19.099131",
+  "total": 16,
   "produtos": [
+    {
+      "produto": "Algodão em caroço",
+      "slug": "algodao-em-caroco",
+      "modelos": [
+        "linear",
+        "arima",
+        "auto_arima",
+        "random_forest",
+        "xgboost"
+      ]
+    },
     {
       "produto": "Arroz em casca tipo 1",
       "slug": "arroz-em-casca-tipo-1",
@@ -25,8 +36,8 @@
       ]
     },
     {
-      "produto": "Café beneficiado bebida dura tipo 6",
-      "slug": "cafe-beneficiado-bebida-dura-tipo-6",
+      "produto": "Café beneficiado",
+      "slug": "cafe-beneficiado",
       "modelos": [
         "linear",
         "arima",
@@ -38,17 +49,6 @@
     {
       "produto": "Café em coco",
       "slug": "cafe-em-coco",
-      "modelos": [
-        "linear",
-        "arima",
-        "auto_arima",
-        "random_forest",
-        "xgboost"
-      ]
-    },
-    {
-      "produto": "Erva-mate",
-      "slug": "erva-mate",
       "modelos": [
         "linear",
         "arima",
@@ -135,17 +135,6 @@
       ]
     },
     {
-      "produto": "Milho comum",
-      "slug": "milho-comum",
-      "modelos": [
-        "linear",
-        "arima",
-        "auto_arima",
-        "random_forest",
-        "xgboost"
-      ]
-    },
-    {
       "produto": "Soja industrial tipo 1",
       "slug": "soja-industrial-tipo-1",
       "modelos": [
@@ -157,19 +146,8 @@
       ]
     },
     {
-      "produto": "Suíno em pé tipo carne não integrado",
-      "slug": "suino-em-pe-tipo-carne-nao-integrado",
-      "modelos": [
-        "linear",
-        "arima",
-        "auto_arima",
-        "random_forest",
-        "xgboost"
-      ]
-    },
-    {
-      "produto": "Trigo",
-      "slug": "trigo",
+      "produto": "Suíno vivo",
+      "slug": "suino-vivo",
       "modelos": [
         "linear",
         "arima",
