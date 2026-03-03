@@ -94,6 +94,9 @@ def load_data(regional: bool = False) -> pd.DataFrame:
     missing_year = df['ano'].isna().sum()
     if missing_year > 0:
         logger.warning(f"Dropping {missing_year} records with missing year (ETL date parse failure)")
+        if 'arquivo' in df.columns:
+            bad_files = df[df['ano'].isna()]['arquivo'].unique()[:10]
+            logger.warning(f"  Sample affected files: {list(bad_files)}")
     df = df[df['ano'].notna()]
 
     # Normalize price column name
