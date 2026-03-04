@@ -126,6 +126,89 @@ PRODUCT_UNITS = {
     'Mandioca industrial': 'tonelada',
 }
 
+# Regional aliases for daily files (maps abbreviated names to canonical names)
+REGIONAL_ALIASES: Dict[str, str] = {
+    # Canonical names (lowercase, no accents)
+    'apucarana': 'Apucarana',
+    'campo mourao': 'Campo Mourão',
+    'cascavel': 'Cascavel',
+    'cornelio procopio': 'Cornélio Procópio',
+    'curitiba': 'Curitiba',
+    'francisco beltrao': 'Francisco Beltrão',
+    'guarapuava': 'Guarapuava',
+    'irati': 'Irati',
+    'ivaipora': 'Ivaiporã',
+    'jacarezinho': 'Jacarezinho',
+    'laranjeiras do sul': 'Laranjeiras do Sul',
+    'londrina': 'Londrina',
+    'maringa': 'Maringá',
+    'paranavai': 'Paranavaí',
+    'pato branco': 'Pato Branco',
+    'pitanga': 'Pitanga',
+    'ponta grossa': 'Ponta Grossa',
+    'toledo': 'Toledo',
+    'umuarama': 'Umuarama',
+    'uniao da vitoria': 'União da Vitória',
+    # Comma-abbreviated (daily files format)
+    'c,mourao': 'Campo Mourão',
+    'c, mourao': 'Campo Mourão',
+    'c,procopio': 'Cornélio Procópio',
+    'c, procopio': 'Cornélio Procópio',
+    'f,beltrao': 'Francisco Beltrão',
+    'f, beltrao': 'Francisco Beltrão',
+    'p,grossa': 'Ponta Grossa',
+    'p, grossa': 'Ponta Grossa',
+    'p,branco': 'Pato Branco',
+    'p, branco': 'Pato Branco',
+    'u,vitoria': 'União da Vitória',
+    'u, vitoria': 'União da Vitória',
+    'laranj,sul': 'Laranjeiras do Sul',
+    'laranj, sul': 'Laranjeiras do Sul',
+    # Dot-abbreviated
+    'c.mourao': 'Campo Mourão',
+    'c. mourao': 'Campo Mourão',
+    'c.procopio': 'Cornélio Procópio',
+    'c. procopio': 'Cornélio Procópio',
+    'f.beltrao': 'Francisco Beltrão',
+    'f. beltrao': 'Francisco Beltrão',
+    'p.grossa': 'Ponta Grossa',
+    'p. grossa': 'Ponta Grossa',
+    'p.branco': 'Pato Branco',
+    'p. branco': 'Pato Branco',
+    'u.vitoria': 'União da Vitória',
+    'u. vitoria': 'União da Vitória',
+}
+
+
+def normalize_regional_name(name: str) -> Optional[str]:
+    """Normalize regional name to canonical form."""
+    if not name or pd.isna(name):
+        return None
+
+    # Clean and lowercase
+    name_clean = str(name).strip().lower()
+    name_clean = re.sub(r'\s+', ' ', name_clean)
+    # Remove accents
+    name_clean = unicodedata.normalize('NFKD', name_clean)
+    name_clean = ''.join(c for c in name_clean if not unicodedata.combining(c))
+
+    # Exact match
+    if name_clean in REGIONAL_ALIASES:
+        return REGIONAL_ALIASES[name_clean]
+
+    # Try replacing comma with dot
+    name_with_dot = name_clean.replace(',', '.')
+    if name_with_dot in REGIONAL_ALIASES:
+        return REGIONAL_ALIASES[name_with_dot]
+
+    # Try removing punctuation
+    name_no_punct = re.sub(r'[,.\-]', '', name_clean).strip()
+    name_no_punct = re.sub(r'\s+', ' ', name_no_punct)
+    if name_no_punct in REGIONAL_ALIASES:
+        return REGIONAL_ALIASES[name_no_punct]
+
+    return None
+
 
 def get_canonical_unit(product_name: str) -> Optional[str]:
     """Get the canonical unit for a product."""
@@ -469,6 +552,173 @@ def process_excel_file(filepath: Path) -> List[dict]:
 
     except Exception as e:
         logger.error(f"Error processing {filepath}: {e}")
+
+    return all_records
+
+
+def extract_regional_headers_daily(df: pd.DataFrame) -> Dict[int, str]:
+    """Extract regional names from daily file header rows.
+
+    Daily files have regional names in row 3 (0-indexed), columns 2-21.
+    Format: APUCARANA, CAMPO MOURÃO, ..., UNIÃO DA VITÓRIA
+    """
+    col_to_regional = {}
+
+    # Scan rows 0-9 for regional headers
+    for row_idx in range(min(10, len(df))):
+        row = df.iloc[row_idx]
+        found_in_row = 0
+
+        for col_idx in range(2, min(len(row), 22)):  # Columns 2-21 are regionais
+            cell = row.iloc[col_idx]
+            if pd.isna(cell):
+                continue
+
+            cell_str = str(cell).strip()
+            if not cell_str or cell_str.upper() in ['NAN', 'MÉDIA', 'MEDIA', 'VAR', 'VAR,', '\\\\\\']:
+                continue
+
+            regional = normalize_regional_name(cell_str)
+            if regional and col_idx not in col_to_regional:
+                col_to_regional[col_idx] = regional
+                found_in_row += 1
+
+        # If we found many regionais in this row, stop looking
+        if found_in_row >= 10:
+            break
+
+    return col_to_regional
+
+
+def process_sheet_regional(df: pd.DataFrame, date: datetime, filename: str,
+                           col_to_regional: Dict[int, str]) -> List[dict]:
+    """Process a single sheet and extract ONE RECORD PER REGIONAL.
+
+    Unlike process_sheet() which aggregates all regional prices,
+    this function creates separate records for each regional.
+    """
+    records = []
+
+    if df.empty or len(df) < 6 or not col_to_regional:
+        return records
+
+    data_start = find_data_start_row(df)
+
+    # Track current product for multi-row format
+    current_base_product = None
+    current_type = None
+    current_unit = None
+
+    for row_idx in range(data_start, len(df)):
+        row = df.iloc[row_idx]
+
+        # Get column 0 and 1 values
+        cell0 = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ''
+        cell1 = str(row.iloc[1]).upper().strip() if len(row) > 1 and pd.notna(row.iloc[1]) else ''
+
+        # Determine if this is MIN, M_C, or MAX row
+        is_min = cell1 == 'MIN'
+        is_mc = cell1 == 'M_C'
+        is_max = cell1 in ['MAX', 'MÁX', 'M�X']
+
+        if not (is_min or is_mc or is_max):
+            continue
+
+        # Check what's in cell0
+        if cell0:
+            cell0_clean = cell0.replace('\n', ' ').strip()
+
+            # Check if it's the new format (product + unit in same cell)
+            product_text, unit = extract_unit_from_text(cell0_clean)
+
+            if unit:
+                if product_text and not is_invalid_entry(product_text):
+                    current_base_product = product_text
+                    current_type = None
+                    current_unit = unit
+            elif is_unit(cell0_clean):
+                current_unit = cell0_clean
+            elif is_type_variety(cell0_clean):
+                current_type = cell0_clean
+            elif not is_invalid_entry(cell0_clean):
+                current_base_product = cell0_clean
+                current_type = None
+                current_unit = None
+
+        # Only record on M_C rows (média)
+        if is_mc and current_base_product:
+            # Build full product name
+            if current_type:
+                full_product = f"{current_base_product} {current_type}"
+            else:
+                full_product = current_base_product
+
+            full_product = re.sub(r'\s+', ' ', full_product).strip()
+
+            # Create one record per regional
+            for col_idx, regional in col_to_regional.items():
+                if col_idx >= len(row):
+                    continue
+
+                price = parse_number(row.iloc[col_idx])
+                if not price:
+                    continue
+
+                record = {
+                    'data': date.strftime('%Y-%m-%d') if date else None,
+                    'ano': date.year if date else None,
+                    'mes': date.month if date else None,
+                    'dia': date.day if date else None,
+                    'produto': full_product,
+                    'regional': regional,
+                    'unidade': current_unit,
+                    'categoria': detect_category(full_product),
+                    'preco': round(price, 2),  # Use 'preco' to match existing regional CSV
+                    'arquivo': filename,
+                }
+                records.append(record)
+
+    return records
+
+
+def process_excel_file_regional(filepath: Path) -> List[dict]:
+    """Process a single Excel file and extract regional records.
+
+    Returns one record per (date, product, regional) combination.
+    """
+    all_records = []
+
+    try:
+        engine = 'xlrd' if filepath.suffix == '.xls' else 'openpyxl'
+        xl = pd.ExcelFile(filepath, engine=engine)
+
+        for sheet_name in xl.sheet_names:
+            # Skip non-data sheets
+            if sheet_name.lower() in ['base net', 'base', 'índice', 'indice']:
+                continue
+
+            date = parse_date_from_sheet(sheet_name, filepath.stem)
+
+            if not date:
+                year_match = re.search(r'(19|20)\d{2}', filepath.stem)
+                if year_match:
+                    year = int(year_match.group())
+                    date = datetime(year, 1, 1)
+
+            try:
+                df = pd.read_excel(xl, sheet_name=sheet_name, header=None)
+
+                # Extract regional headers from this sheet
+                col_to_regional = extract_regional_headers_daily(df)
+
+                if col_to_regional:
+                    records = process_sheet_regional(df, date, filepath.name, col_to_regional)
+                    all_records.extend(records)
+            except Exception:
+                continue
+
+    except Exception as e:
+        logger.error(f"Error processing regional {filepath}: {e}")
 
     return all_records
 

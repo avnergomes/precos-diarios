@@ -32,6 +32,7 @@ sys.path.insert(0, str(ROOT_DIR))
 DATA_DIR = ROOT_DIR / "data"
 PROCESSED_DIR = DATA_DIR / "processed"
 CONSOLIDATED_CSV = PROCESSED_DIR / "consolidated.csv"
+CONSOLIDATED_REGIONAL_CSV = PROCESSED_DIR / "consolidated_regional.csv"
 JSON_DIR = DATA_DIR / "json"
 DASHBOARD_DATA_DIR = ROOT_DIR / "dashboard" / "public" / "data"
 DAILY_DIR = DATA_DIR / "extracted" / "daily"
@@ -117,6 +118,76 @@ def step_process_new_files(new_files):
     return True
 
 
+def step_process_regional_files(new_files):
+    """Step 2b: Process new Excel files for REGIONAL data and append to consolidated_regional.csv."""
+    logger.info("=" * 60)
+    logger.info("STEP 2b: Processing regional data from new files")
+    logger.info("=" * 60)
+
+    import pandas as pd
+    from api.etl_process import process_excel_file_regional
+
+    if not new_files:
+        logger.info("No new files to process for regional data")
+        return False
+
+    # Process new files for regional data
+    all_records = []
+    for filepath in new_files:
+        logger.info(f"  Processing regional: {filepath.name}")
+        records = process_excel_file_regional(filepath)
+        all_records.extend(records)
+
+    if not all_records:
+        logger.info("No regional records extracted from new files")
+        return False
+
+    logger.info(f"Extracted {len(all_records)} regional records from {len(new_files)} files")
+
+    # Create DataFrame
+    new_df = pd.DataFrame(all_records)
+    logger.info(f"Regional records: {len(new_df)}")
+
+    if new_df.empty:
+        logger.info("No valid regional records")
+        return False
+
+    # Normalize product names (reuse from etl_process)
+    from api.etl_process import normalize_products
+    # Add dummy columns required by normalize_products
+    if 'preco_medio' not in new_df.columns:
+        new_df['preco_medio'] = new_df['preco']
+    new_df = normalize_products(new_df)
+    # Remove dummy column if added
+    if 'preco_medio' in new_df.columns and 'preco' in new_df.columns:
+        new_df = new_df.drop(columns=['preco_medio'])
+
+    # Load existing regional data
+    if CONSOLIDATED_REGIONAL_CSV.exists():
+        existing_df = pd.read_csv(CONSOLIDATED_REGIONAL_CSV, encoding='utf-8-sig')
+        logger.info(f"Existing regional: {len(existing_df)} records")
+
+        # Append new records
+        combined_df = pd.concat([existing_df, new_df], ignore_index=True)
+    else:
+        combined_df = new_df
+
+    # Deduplicate
+    before_dedup = len(combined_df)
+    combined_df = combined_df.drop_duplicates(subset=['data', 'produto', 'regional', 'preco'])
+    logger.info(f"After dedup: {len(combined_df)} records (removed {before_dedup - len(combined_df)} dupes)")
+
+    # Sort
+    combined_df = combined_df.sort_values(['ano', 'mes', 'dia', 'regional', 'produto'], na_position='last')
+
+    # Save
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    combined_df.to_csv(CONSOLIDATED_REGIONAL_CSV, index=False, encoding='utf-8-sig')
+    logger.info(f"Saved regional CSV: {len(combined_df)} records")
+
+    return True
+
+
 def step_preprocess():
     """Step 3: Regenerate dashboard JSON files from consolidated.csv."""
     logger.info("=" * 60)
@@ -177,12 +248,20 @@ def main():
         logger.error(f"Scraper failed: {e}")
         new_files = []
 
-    # Step 2: Process new files
+    # Step 2: Process new files (aggregated)
     try:
         has_new_data = step_process_new_files(new_files)
     except Exception as e:
         logger.error(f"Processing failed: {e}")
         has_new_data = False
+
+    # Step 2b: Process new files (regional)
+    try:
+        has_regional_data = step_process_regional_files(new_files)
+        if has_regional_data:
+            has_new_data = True
+    except Exception as e:
+        logger.error(f"Regional processing failed: {e}")
 
     if not has_new_data:
         logger.info("No new data found. Checking if JSON files need regeneration...")
