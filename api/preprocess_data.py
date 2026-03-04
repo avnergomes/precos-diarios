@@ -110,6 +110,14 @@ def load_data(regional: bool = False) -> pd.DataFrame:
     if 'regional' in df.columns:
         df['regional'] = df['regional'].apply(fix_encoding)
 
+    # Normalize category names (fix missing accents)
+    category_fixes = {
+        'Graos': 'Grãos',
+        'Cafe': 'Café',
+        'Pecuaria': 'Pecuária',
+    }
+    df['categoria'] = df['categoria'].replace(category_fixes)
+
     # Fix category inconsistencies - use most common category for each product
     product_main_category = df.groupby('produto')['categoria'].agg(
         lambda x: x.value_counts().index[0]
@@ -443,32 +451,50 @@ def generate_detailed_regional_data(df: pd.DataFrame) -> dict:
         logger.warning("No regional column found - skipping detailed regional data")
         return {'records': [], 'generated_at': datetime.now().isoformat()}
 
-    # Use stratified sampling to guarantee representation of all (regional, ano) combos
-    MAX_RECORDS = 200000  # Increased from 100k — ~20MB JSON is acceptable for static asset
-    if len(df) > MAX_RECORDS:
-        # Stratified sample by (regional, ano) to preserve all combinations
-        strata = df.groupby(['regional', 'ano'], group_keys=False)
-        # Calculate proportional sample size per stratum, minimum 1
+    # Sampling strategy: keep ALL recent data (2025+), stratified sample for historical data
+    MAX_RECORDS = 300000
+    RECENT_YEAR_CUTOFF = 2025  # Include all records from this year onwards
+
+    # Split into recent and historical
+    recent_df = df[df['ano'] >= RECENT_YEAR_CUTOFF]
+    historical_df = df[df['ano'] < RECENT_YEAR_CUTOFF]
+
+    # Budget for historical data
+    historical_budget = max(0, MAX_RECORDS - len(recent_df))
+
+    if len(historical_df) > historical_budget and historical_budget > 0:
+        # Stratified sample by (regional, ano, mes) for historical data
+        strata = historical_df.groupby(['regional', 'ano', 'mes'], group_keys=False)
         strata_sizes = strata.size()
         total = strata_sizes.sum()
-        target_sizes = (strata_sizes / total * MAX_RECORDS).clip(lower=1).astype(int)
+        target_sizes = (strata_sizes / total * historical_budget).clip(lower=1).astype(int)
 
         sampled_parts = []
-        for (reg, ano), size in target_sizes.items():
-            stratum_df = df[(df['regional'] == reg) & (df['ano'] == ano)]
+        for (reg, ano, mes), size in target_sizes.items():
+            stratum_df = historical_df[(historical_df['regional'] == reg) &
+                                       (historical_df['ano'] == ano) &
+                                       (historical_df['mes'] == mes)]
             n = min(size, len(stratum_df))
             sampled_parts.append(stratum_df.sample(n=n, random_state=42))
 
-        sample_df = pd.concat(sampled_parts, ignore_index=True)
-        logger.info(f"Stratified sample: {len(sample_df)} records from {len(df)} (preserving all regional-year combos)")
-    else:
+        historical_sample = pd.concat(sampled_parts, ignore_index=True)
+        sample_df = pd.concat([recent_df, historical_sample], ignore_index=True)
+        logger.info(f"Sample: {len(recent_df)} recent (>={RECENT_YEAR_CUTOFF}) + {len(historical_sample)} historical = {len(sample_df)} total")
+    elif len(historical_df) <= historical_budget:
+        # All data fits within budget
         sample_df = df
+        logger.info(f"Using all {len(df)} records (within budget)")
+    else:
+        # Only recent data (no budget for historical)
+        sample_df = recent_df
+        logger.info(f"Using only recent data: {len(recent_df)} records")
 
     records = []
     for _, row in sample_df.iterrows():
         records.append({
             'd': row.get('data', ''),
             'a': int(row['ano']) if pd.notna(row['ano']) else None,
+            'm': int(row['mes']) if pd.notna(row.get('mes')) else None,
             'p': row.get('produto', ''),
             'c': row.get('categoria', ''),
             'r': row.get('regional', ''),
