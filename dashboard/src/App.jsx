@@ -199,8 +199,6 @@ function App() {
             <RidgelineChart
               data={filteredTimeSeries}
               title="Distribuicao de Precos por Ano"
-              width={500}
-              height={400}
             />
           </div>
         </section>

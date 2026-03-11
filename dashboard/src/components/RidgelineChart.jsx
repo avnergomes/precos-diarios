@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import * as d3 from 'd3'
 
 const MARGIN = { top: 30, right: 30, bottom: 40, left: 60 }
@@ -12,9 +12,21 @@ const YEAR_COLORS = [
 export default function RidgelineChart({
   data,
   title = "Distribuição de Preços por Ano",
-  width = 700,
-  height = 450
 }) {
+  const containerRef = useRef(null)
+  const [containerWidth, setContainerWidth] = useState(0)
+
+  useEffect(() => {
+    if (!containerRef.current) return
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width)
+      }
+    })
+    observer.observe(containerRef.current)
+    return () => observer.disconnect()
+  }, [])
+
   const chartData = useMemo(() => {
     if (!data) return null
 
@@ -55,7 +67,7 @@ export default function RidgelineChart({
 
   if (!chartData) {
     return (
-      <div className="bg-white rounded-xl shadow-lg p-6">
+      <div ref={containerRef} className="bg-white rounded-xl shadow-lg p-6">
         <h3 className="text-lg font-semibold text-slate-700 mb-4">{title}</h3>
         <div className="h-64 flex items-center justify-center text-slate-400">
           Dados insuficientes para análise de distribuição
@@ -64,10 +76,15 @@ export default function RidgelineChart({
     )
   }
 
+  const { densities, minVal, maxVal, years, excludedYearsCount } = chartData
+
+  // Responsive: compute dimensions from container
+  const width = Math.max(containerWidth, 320)
+  const rowHeight = Math.max(18, Math.min(24, 500 / years.length))
+  const height = MARGIN.top + MARGIN.bottom + years.length * rowHeight
+
   const innerWidth = width - MARGIN.left - MARGIN.right
   const innerHeight = height - MARGIN.top - MARGIN.bottom
-
-  const { densities, minVal, maxVal, years, excludedYearsCount } = chartData
 
   // Find max density for scaling
   const maxDensity = d3.max(densities.flatMap(d => d.density.map(p => p[1])))
@@ -100,10 +117,15 @@ export default function RidgelineChart({
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
+    <div ref={containerRef} className="bg-white rounded-xl shadow-lg p-6">
       <h3 className="text-lg font-semibold text-slate-700 mb-4">{title}</h3>
 
-      <svg width={width} height={height}>
+      {containerWidth > 0 && (
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        width="100%"
+        style={{ overflow: 'visible' }}
+      >
         <defs>
           {densities.map((yearData, i) => (
             <linearGradient
@@ -226,6 +248,7 @@ export default function RidgelineChart({
           })}
         </g>
       </svg>
+      )}
 
       {/* Summary */}
       <div className="mt-4 pt-4 border-t flex items-center justify-between text-sm">
