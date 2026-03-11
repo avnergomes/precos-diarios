@@ -24,6 +24,7 @@ jobs:
             --exclude "^mailto:"
             --exclude "^https://script.google.com"
             --exclude "^https://www.linkedin.com"
+            --exclude "^https://(www\\.)?planalto\\.gov\\.br"
             --timeout 30
             "./dashboard/**/*.html"
             "./**/*.md"
