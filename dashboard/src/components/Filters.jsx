@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Filter, RotateCcw, Search, X, ChevronDown, ChevronUp, MapPin } from 'lucide-react'
+import { Filter, RotateCcw, Search, X, ChevronDown, MapPin } from 'lucide-react'
 import { formatCategoryName } from '../utils/format'
 
 export default function Filters({ filters, setFilters, options, metadata, hasRegionalData }) {
@@ -20,8 +20,16 @@ export default function Filters({ filters, setFilters, options, metadata, hasReg
   const [searchTerm, setSearchTerm] = useState('')
   const [showAllProducts, setShowAllProducts] = useState(false)
   const [showAllRegionais, setShowAllRegionais] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(true)
 
   const hasActiveFilters = Object.values(filters).some(v => v !== null)
+
+  const activeFilterCount = [
+    filters.anoMin || filters.anoMax,
+    filters.categoria,
+    filters.produto,
+    filters.regional,
+  ].filter(Boolean).length
 
   const updateFilter = (key, value) => {
     setFilters(prev => {
@@ -124,17 +132,29 @@ export default function Filters({ filters, setFilters, options, metadata, hasReg
     <div className="card">
       {/* Header */}
       <div className="w-full flex items-center justify-between p-4 pb-3">
-        <div className="flex items-center gap-3">
+        <button
+          onClick={() => setIsExpanded(prev => !prev)}
+          className="flex items-center gap-3"
+          aria-label={isExpanded ? 'Recolher filtros' : 'Expandir filtros'}
+        >
           <div className="p-2 bg-primary-100 rounded-lg">
             <Filter className="w-5 h-5 text-primary-600" />
           </div>
           <div className="text-left">
-            <h3 className="font-semibold text-dark-800">Filtros</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-dark-800">Filtros</h3>
+              {activeFilterCount > 0 && (
+                <span className="active-filter-badge">{activeFilterCount}</span>
+              )}
+            </div>
             <p className="text-sm text-dark-500">
               Clique para selecionar
             </p>
           </div>
-        </div>
+          <ChevronDown
+            className={`w-5 h-5 text-dark-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+          />
+        </button>
 
         {hasActiveFilters && (
           <button
@@ -148,6 +168,7 @@ export default function Filters({ filters, setFilters, options, metadata, hasReg
         )}
       </div>
 
+      <div className={`filter-panel ${isExpanded ? '' : 'collapsed'}`}>
       <div className="px-4 pb-4 space-y-4">
         {/* Periodo */}
         <div>
@@ -222,17 +243,8 @@ export default function Filters({ filters, setFilters, options, metadata, hasReg
                 onClick={() => setShowAllRegionais(!showAllRegionais)}
                 className="mt-2 text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
               >
-                {showAllRegionais ? (
-                  <>
-                    <ChevronUp className="w-4 h-4" />
-                    Mostrar menos
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown className="w-4 h-4" />
-                    Mostrar todas ({regionais.length})
-                  </>
-                )}
+                <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${showAllRegionais ? 'rotate-180' : ''}`} />
+                {showAllRegionais ? 'Mostrar menos' : `Mostrar todas (${regionais.length})`}
               </button>
             )}
           </div>
@@ -310,17 +322,8 @@ export default function Filters({ filters, setFilters, options, metadata, hasReg
               onClick={() => setShowAllProducts(!showAllProducts)}
               className="mt-2 text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
             >
-              {showAllProducts ? (
-                <>
-                  <ChevronUp className="w-4 h-4" />
-                  Mostrar menos
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="w-4 h-4" />
-                  Mostrar todos ({filteredProducts.length})
-                </>
-              )}
+              <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${showAllProducts ? 'rotate-180' : ''}`} />
+              {showAllProducts ? 'Mostrar menos' : `Mostrar todos (${filteredProducts.length})`}
             </button>
           )}
 
@@ -372,6 +375,7 @@ export default function Filters({ filters, setFilters, options, metadata, hasReg
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   )
