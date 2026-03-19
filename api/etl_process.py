@@ -347,48 +347,130 @@ def extract_unit_from_text(text: str) -> Tuple[str, Optional[str]]:
     return text, None
 
 
-def parse_date_from_sheet(sheet_name: str, filename: str) -> Optional[datetime]:
-    """Parse date from sheet name."""
-    patterns = [
-        r'(\d{2})-(\d{2})-(\d{2,4})',
-        r'(\d{2})_(\d{2})_(\d{2,4})',
-        r'^(\d{2})$',  # Just day number
-    ]
+def parse_date_from_filename(filename: str) -> Optional[datetime]:
+    """Extract date from daily filename like '2026-03-04_04-03-2026-impressao'.
 
-    for pattern in patterns:
-        match = re.search(pattern, sheet_name)
-        if match:
-            groups = match.groups()
-            if len(groups) == 3:
-                day, month, year = groups
-                year = int(year)
-                if year < 100:
-                    year = 2000 + year if year < 50 else 1900 + year
-                try:
-                    return datetime(year, int(month), int(day))
-                except ValueError:
-                    continue
-            elif len(groups) == 1:
-                # Just day - need to get month/year from filename
-                day = int(groups[0])
-                year_match = re.search(r'(19|20)\d{2}', filename)
-                month_map = {
-                    'janeiro': 1, 'fevereiro': 2, 'marco': 3, 'abril': 4,
-                    'maio': 5, 'junho': 6, 'julho': 7, 'agosto': 8,
-                    'setembro': 9, 'outubro': 10, 'novembro': 11, 'dezembro': 12,
-                }
-                month = None
-                for m_name, m_num in month_map.items():
-                    if m_name in filename.lower():
-                        month = m_num
-                        break
-                if year_match and month:
-                    try:
-                        return datetime(int(year_match.group()), month, day)
-                    except ValueError:
-                        pass
+    Daily files use prefix YYYY-MM-DD or contain DD-MM-YYYY in the name.
+    """
+    # Try YYYY-MM-DD prefix (most reliable for daily files)
+    match = re.search(r'(\d{4})[-_](\d{2})[-_](\d{2})', filename)
+    if match:
+        year, month, day = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        if 2000 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
+            try:
+                return datetime(year, month, day)
+            except ValueError:
+                pass
+
+    # Try DD-MM-YYYY (embedded in filename after the prefix)
+    match = re.search(r'(\d{2})-(\d{2})-(\d{4})', filename)
+    if match:
+        day, month, year = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        if 2000 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
+            try:
+                return datetime(year, month, day)
+            except ValueError:
+                pass
 
     return None
+
+
+def parse_date_from_sheet(sheet_name: str, filename: str) -> Optional[datetime]:
+    """Parse date from sheet name, falling back to filename."""
+    sheet_stripped = sheet_name.strip()
+
+    # Pattern 1: DD-MM-YYYY or DD_MM_YYYY (e.g., '04-03-2026')
+    match = re.match(r'^(\d{2})[-_](\d{2})[-_](\d{4})$', sheet_stripped)
+    if match:
+        day, month, year = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        try:
+            return datetime(year, month, day)
+        except ValueError:
+            pass
+
+    # Pattern 2: DD-MM-YY or DD_MM_YY (e.g., '01-08-19')
+    match = re.match(r'^(\d{2})[-_](\d{2})[-_](\d{2})$', sheet_stripped)
+    if match:
+        day, month, yy = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        year = 2000 + yy if yy < 50 else 1900 + yy
+        try:
+            return datetime(year, month, day)
+        except ValueError:
+            pass
+
+    # Pattern 3: DD-M-YY (single-digit month, e.g., '31-3-20')
+    match = re.match(r'^(\d{1,2})[-_](\d{1,2})[-_](\d{2,4})$', sheet_stripped)
+    if match:
+        day, month, year = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        if year < 100:
+            year = 2000 + year if year < 50 else 1900 + year
+        try:
+            return datetime(year, month, day)
+        except ValueError:
+            pass
+
+    # Pattern 4: DD-MM (day-month without year, e.g., '28-01') — get year from filename
+    match = re.match(r'^(\d{2})[-_](\d{2})$', sheet_stripped)
+    if match:
+        day, month = int(match.group(1)), int(match.group(2))
+        if 1 <= day <= 31 and 1 <= month <= 12:
+            year_match = re.search(r'(19|20)\d{2}', filename)
+            if year_match:
+                try:
+                    return datetime(int(year_match.group()), month, day)
+                except ValueError:
+                    pass
+
+    # Pattern 5: DDMM (4 digits, e.g., '0104' = day 01, month 04)
+    if re.match(r'^\d{4}$', sheet_stripped):
+        dd, mm = int(sheet_stripped[:2]), int(sheet_stripped[2:])
+        if 1 <= dd <= 31 and 1 <= mm <= 12:
+            year_match = re.search(r'(19|20)\d{2}', filename)
+            if year_match:
+                try:
+                    return datetime(int(year_match.group()), mm, dd)
+                except ValueError:
+                    pass
+
+    # Pattern 6: Just day number (e.g., '02', '15') — get month/year from filename
+    if re.match(r'^\d{1,2}$', sheet_stripped):
+        day = int(sheet_stripped)
+        if 1 <= day <= 31:
+            month, year = _extract_month_year_from_filename(filename)
+            if month and year:
+                try:
+                    return datetime(year, month, day)
+                except ValueError:
+                    pass
+
+    # Fall back to filename date extraction (handles YYYY-MM-DD prefix)
+    return parse_date_from_filename(filename)
+
+
+def _extract_month_year_from_filename(filename: str) -> Tuple[Optional[int], Optional[int]]:
+    """Extract month and year from filename with month names (handles accents)."""
+    month_map = {
+        'janeiro': 1, 'fevereiro': 2, 'marco': 3, 'abril': 4,
+        'maio': 5, 'junho': 6, 'julho': 7, 'agosto': 8,
+        'setembro': 9, 'outubro': 10, 'novembro': 11, 'dezembro': 12,
+    }
+
+    # Normalize filename: remove accents for matching
+    fn_norm = unicodedata.normalize('NFKD', filename.lower())
+    fn_norm = ''.join(c for c in fn_norm if not unicodedata.combining(c))
+
+    month = None
+    for m_name, m_num in month_map.items():
+        if m_name in fn_norm:
+            month = m_num
+            break
+
+    year = None
+    year_match = re.search(r'(19|20)\d{2}', filename)
+    if year_match:
+        year = int(year_match.group())
+
+    return month, year
 
 
 def parse_number(value) -> Optional[float]:
@@ -526,6 +608,10 @@ def process_sheet(df: pd.DataFrame, date: datetime, filename: str) -> List[dict]
     return records
 
 
+# Sheets that contain discontinued/metadata info, not daily price data
+SKIP_SHEETS = {'base net', 'base', 'índice', 'indice', 'planilha1', 'planilha2', 'planilha3'}
+
+
 def process_excel_file(filepath: Path) -> List[dict]:
     """Process a single Excel file with multiple sheets."""
     all_records = []
@@ -535,13 +621,15 @@ def process_excel_file(filepath: Path) -> List[dict]:
         xl = pd.ExcelFile(filepath, engine=engine)
 
         for sheet_name in xl.sheet_names:
+            # Skip non-data sheets
+            if sheet_name.lower().strip() in SKIP_SHEETS:
+                continue
+
             date = parse_date_from_sheet(sheet_name, filepath.stem)
 
             if not date:
-                year_match = re.search(r'(19|20)\d{2}', filepath.stem)
-                if year_match:
-                    year = int(year_match.group())
-                    date = datetime(year, 1, 1)
+                logger.warning(f"Could not parse date for sheet '{sheet_name}' in {filepath.name}, skipping")
+                continue
 
             try:
                 df = pd.read_excel(xl, sheet_name=sheet_name, header=None)
@@ -694,16 +782,14 @@ def process_excel_file_regional(filepath: Path) -> List[dict]:
 
         for sheet_name in xl.sheet_names:
             # Skip non-data sheets
-            if sheet_name.lower() in ['base net', 'base', 'índice', 'indice']:
+            if sheet_name.lower().strip() in SKIP_SHEETS:
                 continue
 
             date = parse_date_from_sheet(sheet_name, filepath.stem)
 
             if not date:
-                year_match = re.search(r'(19|20)\d{2}', filepath.stem)
-                if year_match:
-                    year = int(year_match.group())
-                    date = datetime(year, 1, 1)
+                logger.warning(f"Could not parse date for regional sheet '{sheet_name}' in {filepath.name}, skipping")
+                continue
 
             try:
                 df = pd.read_excel(xl, sheet_name=sheet_name, header=None)

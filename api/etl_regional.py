@@ -515,6 +515,8 @@ def extract_date_from_filename(filename: str, sheet_name: str = '') -> Optional[
     """Extract date from filename patterns used in SIMA archives.
 
     Supported patterns:
+    - "2026-03-04_..." — YYYY-MM-DD prefix (daily files)
+    - "04-03-2026-..." — DD-MM-YYYY (daily files)
     - "Abril 2017", "Janeiro2019" — month name + 4-digit year
     - "Abril2003" — month name directly concatenated with year
     - "Resumo Sima_MMYY", "Resumo SIMA_0705" — underscore + MMYY
@@ -522,6 +524,25 @@ def extract_date_from_filename(filename: str, sheet_name: str = '') -> Optional[
     - "ResumoSIMA_Ago01" — abbreviated month + 2-digit year
     - "Sima Janeiro 2009" — "Sima" + month name + year
     """
+    # Pattern 0: YYYY-MM-DD prefix (daily files like "2026-03-04_04-03-2026-impressao")
+    match = re.search(r'(\d{4})[-_](\d{2})[-_](\d{2})', filename)
+    if match:
+        year, month, day = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        if 2000 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
+            try:
+                return datetime(year, month, day)
+            except ValueError:
+                pass
+
+    # Pattern 0b: DD-MM-YYYY (daily files)
+    match = re.search(r'(\d{2})-(\d{2})-(\d{4})', filename)
+    if match:
+        day, month, year = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        if 2000 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
+            try:
+                return datetime(year, month, day)
+            except ValueError:
+                pass
     month_names = {
         'janeiro': 1, 'fevereiro': 2, 'marco': 3, 'março': 3, 'abril': 4,
         'maio': 5, 'junho': 6, 'julho': 7, 'agosto': 8,
@@ -903,6 +924,10 @@ def process_sheet_regional(df: pd.DataFrame, date: datetime, filename: str) -> L
     return records
 
 
+# Sheets that contain discontinued/metadata info, not daily price data
+SKIP_SHEETS = {'base net', 'base', 'índice', 'indice', 'planilha1', 'planilha2', 'planilha3'}
+
+
 def process_excel_file(filepath: Path) -> List[dict]:
     """Process a single Excel file with multiple sheets."""
     all_records = []
@@ -916,6 +941,10 @@ def process_excel_file(filepath: Path) -> List[dict]:
         xl = pd.ExcelFile(filepath, engine=engine)
 
         for sheet_name in xl.sheet_names:
+            # Skip non-data sheets
+            if sheet_name.lower().strip() in SKIP_SHEETS:
+                continue
+
             # CASCADE 1: Try to parse date from sheet name
             date = parse_date_from_sheet(sheet_name, filepath.stem)
 
@@ -963,12 +992,11 @@ def process_excel_file(filepath: Path) -> List[dict]:
                 except Exception:
                     pass
 
-            # CASCADE 4: Last resort — extract just the year from filename
+            # CASCADE 4: Last resort — extract DDMM from sheet + year from filename
             if not date:
                 year_match = re.search(r'(19|20)\d{2}', filepath.stem)
                 if year_match:
                     year = int(year_match.group())
-                    # Try to get month from sheet_name if it's DDMM
                     sheet_stripped = sheet_name.strip()
                     if re.match(r'^\d{4}$', sheet_stripped):
                         mm = int(sheet_stripped[2:])
@@ -977,12 +1005,11 @@ def process_excel_file(filepath: Path) -> List[dict]:
                             try:
                                 date = datetime(year, mm, dd)
                             except ValueError:
-                                date = datetime(year, 1, 1)
-                    if not date:
-                        date = datetime(year, 1, 1)
+                                pass
 
             if not date:
-                logger.warning(f"Could not parse date for sheet '{sheet_name}' in '{filepath.name}'")
+                logger.warning(f"Could not parse date for sheet '{sheet_name}' in '{filepath.name}', skipping")
+                continue
 
             try:
                 df = pd.read_excel(xl, sheet_name=sheet_name, header=None)
