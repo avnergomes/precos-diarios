@@ -51,3 +51,8 @@ npm-debug.log*
 # Docs folder (contains scripts and deployment info)
 docs/
 !docs/README.md
+
+# Claude Code
+.claude/
+CLAUDE.md
+.claudeignore
