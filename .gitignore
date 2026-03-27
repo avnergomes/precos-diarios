@@ -66,3 +66,4 @@ data/json/
 *.gs
 docs/
 !docs/README.md
+dashboard/public/assets/mun_PR.json
