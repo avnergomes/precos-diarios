@@ -257,11 +257,12 @@ def scrape_latest_quotations(days_back: int = 7, backfill: bool = False):
     """
     logger.info("Starting SIMA page discovery and Excel download...")
 
-    # Determine start ID from links.txt and state file
-    links_id = get_latest_cotacao_id()
+    # Determine start ID from state file (authoritative source)
+    # NOTE: links.txt may contain out-of-order IDs (e.g., old pages with high IDs),
+    # so we rely on state_id which tracks the highest ID with RECENT data.
     state = load_scraper_state()
     state_id = state.get("last_found_id", 2520)
-    start_id = max(links_id, state_id)
+    start_id = state_id
 
     max_scan = MAX_FORWARD_SCAN if not backfill else 1500
     max_failures = MAX_CONSECUTIVE_FAILURES if not backfill else 30
