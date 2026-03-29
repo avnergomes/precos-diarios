@@ -267,7 +267,7 @@ def scrape_latest_quotations(days_back: int = 7, backfill: bool = False):
     max_scan = MAX_FORWARD_SCAN if not backfill else 1500
     max_failures = MAX_CONSECUTIVE_FAILURES if not backfill else 30
 
-    logger.info(f"Scanning from ID {start_id} (links={links_id}, state={state_id}), max_scan={max_scan}")
+    logger.info(f"Scanning from ID {start_id} (state={state_id}), max_scan={max_scan}")
 
     new_links = []
     consecutive_failures = 0
