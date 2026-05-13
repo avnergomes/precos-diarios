@@ -1,3 +1,9 @@
+dashboard/.env.production
+
+# Windows reserved device name — git can't add it (always appears via OS)
+/nul
+nul
+
 # Dependencies
 node_modules/
 .pnpm-store/
