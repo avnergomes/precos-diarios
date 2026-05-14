@@ -1,3 +1,4 @@
+// ATLAS-A11Y-HEX-SWEPT
 import { useMemo, useState } from 'react'
 import {
   ComposedChart,
@@ -14,15 +15,15 @@ import {
 import { formatCurrency } from '../utils/format'
 
 const MODEL_STYLES = {
-  linear:        { color: '#8b5cf6', label: 'Regressão Linear' },
+  linear:        { color: '#CC79A7', label: 'Regressão Linear' },
   arima:         { color: '#3b82f6', label: 'ARIMA' },
   auto_arima:    { color: '#06b6d4', label: 'Auto ARIMA' },
   random_forest: { color: '#f97316', label: 'Random Forest' },
-  xgboost:       { color: '#ef4444', label: 'XGBoost' },
-  prophet:       { color: '#22c55e', label: 'Prophet' },
+  xgboost:       { color: '#D55E00', label: 'XGBoost' },
+  prophet:       { color: '#0072B2', label: 'Prophet' },
 }
 
-const FALLBACK_COLORS = ['#6366f1', '#ec4899', '#14b8a6', '#eab308']
+const FALLBACK_COLORS = ['#7a4e88', '#ec4899', '#14b8a6', '#eab308']
 
 function getModelStyle(key, index) {
   if (MODEL_STYLES[key]) return MODEL_STYLES[key]
@@ -277,13 +278,13 @@ export default function ForecastChart({
 
           <XAxis
             dataKey="label"
-            tick={{ fontSize: 11, fill: '#94a3b8' }}
+            tick={{ fontSize: 11, fill: '#918058' }}
             tickLine={false}
             axisLine={{ stroke: '#e2e8f0' }}
           />
 
           <YAxis
-            tick={{ fontSize: 11, fill: '#94a3b8' }}
+            tick={{ fontSize: 11, fill: '#918058' }}
             tickLine={false}
             axisLine={false}
             tickFormatter={(v) => `R$${v.toFixed(0)}`}
@@ -301,7 +302,7 @@ export default function ForecastChart({
               label={{
                 value: 'Previsão',
                 position: 'top',
-                fill: '#94a3b8',
+                fill: '#918058',
                 fontSize: 10,
                 fontWeight: 500,
               }}

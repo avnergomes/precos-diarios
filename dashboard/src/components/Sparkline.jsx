@@ -1,3 +1,4 @@
+// ATLAS-A11Y-HEX-SWEPT
 /**
  * Sparkline - Mini line chart component for inline display in tables
  * Uses SVG for lightweight rendering
@@ -6,7 +7,7 @@ export default function Sparkline({
   data = [],
   width = 80,
   height = 24,
-  color = '#22c55e',
+  color = '#0072B2',
   showEndDot = true
 }) {
   if (!data || data.length < 2) {
@@ -45,7 +46,7 @@ export default function Sparkline({
   const firstValue = values[0]
   const lastValue = values[values.length - 1]
   const trend = lastValue >= firstValue ? 'up' : 'down'
-  const trendColor = trend === 'up' ? '#22c55e' : '#ef4444'
+  const trendColor = trend === 'up' ? '#0072B2' : '#D55E00'
   const finalColor = color === 'auto' ? trendColor : color
 
   return (

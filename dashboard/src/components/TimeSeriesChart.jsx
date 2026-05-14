@@ -1,3 +1,4 @@
+// ATLAS-A11Y-HEX-SWEPT
 import {
   AreaChart,
   Area,
@@ -17,7 +18,7 @@ export default function TimeSeriesChart({
   description,
   height = 300,
   showMinMax = false,
-  color = '#f59e0b',
+  color = '#c89b3c',
   yAxisLabel = 'Preço médio (R$)',
   onPeriodClick,
   selectedPeriod,
@@ -101,13 +102,13 @@ export default function TimeSeriesChart({
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis
               dataKey="periodLabel"
-              tick={{ fontSize: 11, fill: '#64748b' }}
+              tick={{ fontSize: 11, fill: '#6e6453' }}
               tickLine={false}
               axisLine={{ stroke: '#e2e8f0' }}
               interval="preserveStartEnd"
             />
             <YAxis
-              tick={{ fontSize: 11, fill: '#64748b' }}
+              tick={{ fontSize: 11, fill: '#6e6453' }}
               tickLine={false}
               axisLine={false}
               tickFormatter={(value) => `R$${(value / 1).toFixed(0)}`}
@@ -117,7 +118,7 @@ export default function TimeSeriesChart({
                 angle={-90}
                 position="insideLeft"
                 offset={10}
-                style={{ fill: '#64748b', fontSize: 11 }}
+                style={{ fill: '#6e6453', fontSize: 11 }}
               />
             </YAxis>
             <Tooltip content={<CustomTooltip />} />
@@ -125,7 +126,7 @@ export default function TimeSeriesChart({
             <Area
               type="monotone"
               dataKey="max"
-              stroke="#22c55e"
+              stroke="#0072B2"
               fill="none"
               strokeWidth={1}
               strokeDasharray="3 3"
@@ -142,7 +143,7 @@ export default function TimeSeriesChart({
             <Area
               type="monotone"
               dataKey="min"
-              stroke="#ef4444"
+              stroke="#D55E00"
               fill="none"
               strokeWidth={1}
               strokeDasharray="3 3"
@@ -169,13 +170,13 @@ export default function TimeSeriesChart({
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis
               dataKey="periodLabel"
-              tick={{ fontSize: 11, fill: '#64748b' }}
+              tick={{ fontSize: 11, fill: '#6e6453' }}
               tickLine={false}
               axisLine={{ stroke: '#e2e8f0' }}
               interval="preserveStartEnd"
             />
             <YAxis
-              tick={{ fontSize: 11, fill: '#64748b' }}
+              tick={{ fontSize: 11, fill: '#6e6453' }}
               tickLine={false}
               axisLine={false}
               tickFormatter={(value) => `R$${(value / 1).toFixed(0)}`}
@@ -185,7 +186,7 @@ export default function TimeSeriesChart({
                 angle={-90}
                 position="insideLeft"
                 offset={10}
-                style={{ fill: '#64748b', fontSize: 11 }}
+                style={{ fill: '#6e6453', fontSize: 11 }}
               />
             </YAxis>
             <Tooltip content={<CustomTooltip />} />

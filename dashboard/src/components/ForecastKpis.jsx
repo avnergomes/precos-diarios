@@ -1,18 +1,19 @@
+// ATLAS-A11Y-HEX-SWEPT
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { formatCurrency } from '../utils/format'
 
 // Same palette as ForecastChart
 const MODEL_META = {
-  linear:        { color: '#8b5cf6', bg: 'bg-purple-100', text: 'text-purple-600', label: 'Regressão Linear' },
+  linear:        { color: '#CC79A7', bg: 'bg-purple-100', text: 'text-purple-600', label: 'Regressão Linear' },
   arima:         { color: '#3b82f6', bg: 'bg-blue-100',   text: 'text-blue-600',   label: 'ARIMA' },
   auto_arima:    { color: '#06b6d4', bg: 'bg-cyan-100',   text: 'text-cyan-600',   label: 'Auto ARIMA' },
   random_forest: { color: '#f97316', bg: 'bg-orange-100', text: 'text-orange-600',  label: 'Random Forest' },
-  xgboost:       { color: '#ef4444', bg: 'bg-red-100',    text: 'text-red-600',    label: 'XGBoost' },
-  prophet:       { color: '#22c55e', bg: 'bg-green-100',  text: 'text-green-600',  label: 'Prophet' },
+  xgboost:       { color: '#D55E00', bg: 'bg-red-100',    text: 'text-red-600',    label: 'XGBoost' },
+  prophet:       { color: '#0072B2', bg: 'bg-green-100',  text: 'text-green-600',  label: 'Prophet' },
 }
 
 function getMeta(key) {
-  return MODEL_META[key] || { color: '#6366f1', bg: 'bg-indigo-100', text: 'text-indigo-600', label: key }
+  return MODEL_META[key] || { color: '#7a4e88', bg: 'bg-indigo-100', text: 'text-indigo-600', label: key }
 }
 
 function formatSubtitle(key, model) {

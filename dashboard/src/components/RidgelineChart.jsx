@@ -1,3 +1,4 @@
+// ATLAS-A11Y-HEX-SWEPT
 import { useMemo, useRef, useState, useEffect } from 'react'
 import * as d3 from 'd3'
 
@@ -5,8 +6,8 @@ const MARGIN = { top: 30, right: 30, bottom: 40, left: 60 }
 
 // Color scale for years (green gradient)
 const YEAR_COLORS = [
-  '#dcfce7', '#bbf7d0', '#86efac', '#4ade80', '#22c55e',
-  '#16a34a', '#15803d', '#166534', '#14532d', '#052e16'
+  '#d9e6f0', '#bbf7d0', '#87afcd', '#4ade80', '#0072B2',
+  '#005c8e', '#004a72', '#166534', '#003356', '#052e16'
 ]
 
 export default function RidgelineChart({
@@ -147,10 +148,10 @@ export default function RidgelineChart({
           <g transform={`translate(0, ${innerHeight})`}>
             {xScale.ticks(8).map((tick, i) => (
               <g key={`x-tick-${i}`} transform={`translate(${xScale(tick)}, 0)`}>
-                <line y1={0} y2={5} stroke="#94a3b8" />
+                <line y1={0} y2={5} stroke="#918058" />
                 <text
                   y={18}
-                  fill="#64748b"
+                  fill="#6e6453"
                   fontSize={10}
                   textAnchor="middle"
                 >

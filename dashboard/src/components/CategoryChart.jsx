@@ -1,3 +1,4 @@
+// ATLAS-A11Y-HEX-SWEPT
 import { useState } from 'react'
 import {
   BarChart,
@@ -180,7 +181,7 @@ export default function CategoryChart({
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
             <XAxis
               type="number"
-              tick={{ fontSize: 11, fill: '#64748b' }}
+              tick={{ fontSize: 11, fill: '#6e6453' }}
               tickLine={false}
               axisLine={{ stroke: '#e2e8f0' }}
               tickFormatter={(value) => formatCurrency(value)}
@@ -189,7 +190,7 @@ export default function CategoryChart({
                 value={xAxisLabel}
                 position="insideBottom"
                 offset={-5}
-                style={{ fill: '#64748b', fontSize: 11 }}
+                style={{ fill: '#6e6453', fontSize: 11 }}
               />
             </XAxis>
             <YAxis

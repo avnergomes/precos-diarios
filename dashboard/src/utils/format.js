@@ -1,3 +1,4 @@
+// ATLAS-A11Y-HEX-SWEPT
 /**
  * Format a number as Brazilian Real currency
  */
@@ -133,19 +134,19 @@ export function calculateVariation(current, previous) {
  * Category colors
  */
 export const CATEGORY_COLORS = {
-  'Graos': '#22c55e',
-  'Grãos': '#22c55e',
+  'Graos': '#0072B2',
+  'Grãos': '#0072B2',
   'Cafe': '#a16207',
   'Café': '#a16207',
-  'Hortalicas': '#f59e0b',
-  'Hortaliças': '#f59e0b',
-  'Mandioca': '#d97706',
+  'Hortalicas': '#c89b3c',
+  'Hortaliças': '#c89b3c',
+  'Mandioca': '#a87f2d',
   'Frutas': '#ec4899',
-  'Pecuaria': '#8b5cf6',
-  'Pecuária': '#8b5cf6',
+  'Pecuaria': '#CC79A7',
+  'Pecuária': '#CC79A7',
   'Insumos': '#06b6d4',
   'Florestal': '#14b8a6',
-  'Outros': '#64748b',
+  'Outros': '#6e6453',
 }
 
 /**
@@ -188,30 +189,22 @@ export function formatDateTime(dateStr) {
  * Get color for category
  */
 export function getCategoryColor(category) {
-  return CATEGORY_COLORS[category] || '#64748b'
+  return CATEGORY_COLORS[category] || '#6e6453'
 }
 
 /**
  * Chart color palette
  */
-export const CHART_COLORS = [
-  '#f59e0b', // amber
-  '#22c55e', // green
-  '#3b82f6', // blue
-  '#ec4899', // pink
-  '#8b5cf6', // violet
-  '#14b8a6', // teal
-  '#f97316', // orange
-  '#06b6d4', // cyan
-  '#a855f7', // purple
-  '#ef4444', // red
-]
+// Legacy palette kept for getChartColor's internal use; the canonical
+// CHART_COLORS object is re-exported below from chart-palette (daltonic-safe).
+import { ATLAS_CATEGORICAL as _ATLAS_CAT } from './chart-palette.js'
+const LEGACY_CHART_COLORS = _ATLAS_CAT
 
 /**
  * Get chart color by index
  */
 export function getChartColor(index) {
-  return CHART_COLORS[index % CHART_COLORS.length]
+  return LEGACY_CHART_COLORS[index % LEGACY_CHART_COLORS.length]
 }
 
 /**
@@ -222,9 +215,9 @@ export const MAP_GRADIENT = [
   '#fef3c7',
   '#fde68a',
   '#fcd34d',
-  '#fbbf24',
-  '#f59e0b',
-  '#d97706',
+  '#e0b850',
+  '#c89b3c',
+  '#a87f2d',
 ]
 
 /**
@@ -298,3 +291,7 @@ export function getMapColor(value, min, max) {
 
   return MAP_GRADIENT[index]
 }
+
+// ATLAS-PALETTE-V1
+// Re-export the shared Atlas Editorial palette (daltonic-safe).
+export { CHART_COLORS, MAP_GRADIENTS, ATLAS_CATEGORICAL, ATLAS_FOREST, ATLAS_WATER, ATLAS_CLAY, ATLAS_EARTH, ATLAS_HARVEST, ATLAS_DIVERGING, ATLAS_CHROME, categoricalColor, sequentialColor } from './chart-palette.js';
