@@ -51,7 +51,7 @@ HEADERS = {
 def get_latest_cotacao_id() -> int:
     """Find the latest quotation ID by checking the links file."""
     if LINKS_FILE.exists():
-        with open(LINKS_FILE, 'r') as f:
+        with open(LINKS_FILE, 'r', encoding='utf-8') as f:
             for line in f:
                 match = re.search(r'SIMA-(\d+)', line, re.IGNORECASE)
                 if match:
@@ -63,7 +63,7 @@ def load_scraper_state() -> dict:
     """Load persisted scraper state."""
     if STATE_FILE.exists():
         try:
-            with open(STATE_FILE, 'r') as f:
+            with open(STATE_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             pass
@@ -73,7 +73,7 @@ def load_scraper_state() -> dict:
 def save_scraper_state(state: dict):
     """Persist scraper state."""
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(STATE_FILE, 'w') as f:
+    with open(STATE_FILE, 'w', encoding='utf-8') as f:
         json.dump(state, f, indent=2)
 
 
@@ -314,14 +314,14 @@ def update_links_file(new_links: List[str]):
     """Add new links to the links file."""
     existing_links = set()
     if LINKS_FILE.exists():
-        with open(LINKS_FILE, 'r') as f:
+        with open(LINKS_FILE, 'r', encoding='utf-8') as f:
             existing_links = set(line.strip() for line in f if line.strip())
 
     # Add new links at the top
     new_unique = [link for link in new_links if link not in existing_links]
     if new_unique:
         all_links = new_unique + list(existing_links)
-        with open(LINKS_FILE, 'w') as f:
+        with open(LINKS_FILE, 'w', encoding='utf-8') as f:
             for link in all_links:
                 f.write(link + '\n')
         logger.info(f"Added {len(new_unique)} new links to {LINKS_FILE}")

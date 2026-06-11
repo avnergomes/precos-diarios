@@ -18,7 +18,7 @@ import {
   formatCurrency,
   formatCategoryName,
   getCategoryColor,
-  CHART_COLORS,
+  getChartColor,
 } from '../utils/format'
 
 export default function CategoryChart({
@@ -159,7 +159,7 @@ export default function CategoryChart({
               {chartData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
-                  fill={CHART_COLORS[index % CHART_COLORS.length]}
+                  fill={getChartColor(index)}
                   opacity={selectedCategoria && entry.rawName !== selectedCategoria ? 0.4 : 1}
                 />
               ))}
@@ -211,7 +211,7 @@ export default function CategoryChart({
               {chartData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
-                  fill={CHART_COLORS[index % CHART_COLORS.length]}
+                  fill={getChartColor(index)}
                   opacity={selectedCategoria && entry.rawName !== selectedCategoria ? 0.4 : 1}
                 />
               ))}

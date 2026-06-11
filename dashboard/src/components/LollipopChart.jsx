@@ -1,16 +1,9 @@
 // ATLAS-A11Y-HEX-SWEPT
 import { useMemo } from 'react'
 import * as d3 from 'd3'
+import { getCategoryColor, formatCategoryName } from '../utils/format'
 
 const MARGIN = { top: 20, right: 40, bottom: 20, left: 180 }
-
-const CATEGORY_COLORS = {
-  'Graos': '#009E73',
-  'Pecuaria': '#D55E00',
-  'Cafe': '#6B4423',
-  'Florestal': '#0072B2',
-  'Mandioca': '#CC79A7'
-}
 
 export default function LollipopChart({
   data,
@@ -112,7 +105,7 @@ export default function LollipopChart({
           {items.map((item, i) => {
             const y = yScale(item.name) + yScale.bandwidth() / 2
             const xEnd = xScale(item.value)
-            const color = CATEGORY_COLORS[item.category] || '#6e6453'
+            const color = getCategoryColor(item.category)
 
             return (
               <g key={item.name} className="group cursor-pointer">
@@ -188,12 +181,12 @@ export default function LollipopChart({
         </g>
       </svg>
 
-      {/* Legend */}
+      {/* Legend — derivada das categorias presentes nos dados */}
       <div className="mt-4 flex flex-wrap items-center justify-center gap-4">
-        {Object.entries(CATEGORY_COLORS).map(([cat, color]) => (
+        {[...new Set(items.map(d => d.category).filter(Boolean))].map((cat) => (
           <div key={cat} className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-            <span className="text-xs text-slate-600">{cat}</span>
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: getCategoryColor(cat) }} />
+            <span className="text-xs text-slate-600">{formatCategoryName(cat)}</span>
           </div>
         ))}
       </div>

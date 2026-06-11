@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 
 // API URL from environment variable or fallback to local data
 const API_URL = import.meta.env.VITE_API_URL
@@ -10,6 +10,8 @@ export function useData() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [regionalDetailLoading, setRegionalDetailLoading] = useState(false)
+  const regionalRequestedRef = useRef(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -42,17 +44,13 @@ export function useData() {
 
         if (signal.aborted) return
 
-        // Try to load regional data (optional - may not exist)
+        // Try to load regional filters (optional - may not exist).
+        // detailed_regional.json (~33 MB) fica para loadRegionalDetail, sob demanda.
         let regionalFilters = null
-        let detailedRegional = null
 
         try {
-          const [regFilters, regDetailed] = await Promise.all([
-            fetch(DATA_BASE_PATH + 'regional_filters.json', { signal }).then(r => r.ok ? r.json() : null),
-            fetch(DATA_BASE_PATH + 'detailed_regional.json', { signal }).then(r => r.ok ? r.json() : null),
-          ])
-          regionalFilters = regFilters
-          detailedRegional = regDetailed
+          regionalFilters = await fetch(DATA_BASE_PATH + 'regional_filters.json', { signal })
+            .then(r => r.ok ? r.json() : null)
         } catch (err) {
           if (err.name !== 'AbortError') {
             console.warn('Regional data not available:', err)
@@ -67,10 +65,10 @@ export function useData() {
           setData({
             aggregated,
             detailed,
-            detailedRegional,
+            detailedRegional: null,
             timeseries,
             filters: normalizedFilters,
-            hasRegionalData: !!detailedRegional?.records?.length,
+            hasRegionalData: false,
           })
         }
       } catch (err) {
@@ -89,7 +87,26 @@ export function useData() {
     return () => controller.abort()
   }, [])
 
-  return { data, loading, error }
+  // Carrega o detalhamento regional (~33 MB) só quando o usuário seleciona
+  // uma regional. Até lá, a UI usa os dados agregados normalmente.
+  const loadRegionalDetail = useCallback(() => {
+    if (regionalRequestedRef.current) return
+    regionalRequestedRef.current = true
+    setRegionalDetailLoading(true)
+    fetch(DATA_BASE_PATH + 'detailed_regional.json')
+      .then(r => r.ok ? r.json() : null)
+      .catch(() => null)
+      .then(regDetailed => {
+        if (regDetailed?.records?.length) {
+          setData(prev => prev
+            ? { ...prev, detailedRegional: regDetailed, hasRegionalData: true }
+            : prev)
+        }
+      })
+      .finally(() => setRegionalDetailLoading(false))
+  }, [])
+
+  return { data, loading, error, loadRegionalDetail, regionalDetailLoading }
 }
 
 function normalizeFilters(filtersJson, aggregated, detailed, regionalFilters) {

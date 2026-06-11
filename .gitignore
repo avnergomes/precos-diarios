@@ -73,3 +73,6 @@ data/json/
 docs/
 !docs/README.md
 dashboard/public/assets/mun_PR.json
+
+# Artefatos locais do understand-anything
+.understand-anything/

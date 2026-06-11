@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, Key, Copy, Check, ExternalLink, AlertCircle } from 'lucide-react'
 
 const API_BASE_URL = 'https://precos-diarios.onrender.com'
@@ -10,6 +10,16 @@ export default function ApiModal({ isOpen, onClose, appsScriptUrl }) {
   const [error, setError] = useState(null)
   const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState('register')
+
+  // Fechar com Esc enquanto o modal estiver aberto
+  useEffect(() => {
+    if (!isOpen) return undefined
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [isOpen, onClose])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -54,11 +64,11 @@ export default function ApiModal({ isOpen, onClose, appsScriptUrl }) {
         body: JSON.stringify(formData),
       })
 
-      // Apps Script with no-cors returns opaque response
-      // We'll show a success message and ask user to check email
+      // Apps Script com no-cors devolve resposta opaca: não dá para saber se
+      // o envio foi aceito — a mensagem precisa ser neutra, não de sucesso.
       setResult({
         success: true,
-        message: 'Cadastro enviado! Sua API key sera enviada para o email informado.',
+        message: 'Solicitação registrada. Se a chave não chegar no seu email em até 24h, tente novamente ou contate o mantenedor.',
         tier: 'free'
       })
     } catch (err) {
@@ -87,7 +97,7 @@ export default function ApiModal({ isOpen, onClose, appsScriptUrl }) {
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="api-modal-title">
       {/* Overlay */}
       <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
@@ -104,15 +114,16 @@ export default function ApiModal({ isOpen, onClose, appsScriptUrl }) {
                 <Key className="w-5 h-5 text-primary-600" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-dark-800">API de Precos Agricolas</h2>
+                <h2 id="api-modal-title" className="text-lg font-semibold text-dark-800">API de Preços Agrícolas</h2>
                 <p className="text-sm text-dark-500">Acesse dados do SIMA via API REST</p>
               </div>
             </div>
             <button
               onClick={onClose}
+              aria-label="Fechar"
               className="p-2 hover:bg-dark-100 rounded-lg transition-colors"
             >
-              <X className="w-5 h-5 text-dark-500" />
+              <X className="w-5 h-5 text-dark-500" aria-hidden="true" />
             </button>
           </div>
 
@@ -149,7 +160,7 @@ export default function ApiModal({ isOpen, onClose, appsScriptUrl }) {
                 {!result ? (
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <p className="text-sm text-dark-600 mb-4">
-                      Cadastre-se para receber uma chave de API gratuita com acesso aos dados de precos agricolas do Parana.
+                      Cadastre-se para receber uma chave de API gratuita com acesso aos dados de preços agrícolas do Paraná.
                     </p>
 
                     <div>
@@ -266,7 +277,7 @@ export default function ApiModal({ isOpen, onClose, appsScriptUrl }) {
 
                 {/* Authentication */}
                 <div>
-                  <h3 className="text-sm font-semibold text-dark-800 mb-2">Autenticacao</h3>
+                  <h3 className="text-sm font-semibold text-dark-800 mb-2">Autenticação</h3>
                   <p className="text-sm text-dark-600 mb-2">
                     Inclua sua API key no header <code className="bg-dark-100 px-1 rounded">X-API-Key</code> ou como query param <code className="bg-dark-100 px-1 rounded">api_key</code>.
                   </p>
@@ -300,13 +311,13 @@ export default function ApiModal({ isOpen, onClose, appsScriptUrl }) {
                     <EndpointItem
                       method="GET"
                       path="/prices"
-                      description="Consulta precos com filtros"
+                      description="Consulta preços com filtros"
                       params="product, region, category, start_date, end_date, limit"
                     />
                     <EndpointItem
                       method="GET"
                       path="/prices/latest"
-                      description="Ultimos precos por produto/regiao"
+                      description="Últimos preços por produto/região"
                       params="product, region, days"
                     />
                     <EndpointItem

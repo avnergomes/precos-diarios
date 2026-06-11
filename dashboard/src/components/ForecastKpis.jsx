@@ -8,8 +8,8 @@ const MODEL_META = {
   arima:         { color: '#3b82f6', bg: 'bg-blue-100',   text: 'text-blue-600',   label: 'ARIMA' },
   auto_arima:    { color: '#06b6d4', bg: 'bg-cyan-100',   text: 'text-cyan-600',   label: 'Auto ARIMA' },
   random_forest: { color: '#f97316', bg: 'bg-orange-100', text: 'text-orange-600',  label: 'Random Forest' },
-  xgboost:       { color: '#D55E00', bg: 'bg-red-100',    text: 'text-red-600',    label: 'XGBoost' },
-  prophet:       { color: '#0072B2', bg: 'bg-green-100',  text: 'text-green-600',  label: 'Prophet' },
+  xgboost:       { color: '#D55E00', bg: 'bg-orange-100', text: 'text-orange-800', label: 'XGBoost' },
+  prophet:       { color: '#0072B2', bg: 'bg-sky-100',    text: 'text-sky-800',    label: 'Prophet' },
 }
 
 function getMeta(key) {

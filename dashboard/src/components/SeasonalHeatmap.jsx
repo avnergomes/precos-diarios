@@ -94,7 +94,8 @@ export default function SeasonalHeatmap({
     }
   }, [data])
 
-  // Color scale function (green to red) - normalized within each year
+  // Escala sequencial de matiz único (clay) — luminância monotônica,
+  // segura para daltônicos (regra do ecossistema: nunca verde→vermelho).
   const getColor = (value, year) => {
     if (!value || value <= 0) return '#f3f4f6' // gray-100 for no data
 
@@ -105,22 +106,7 @@ export default function SeasonalHeatmap({
     const range = max - min || 1
     const normalized = (value - min) / range
 
-    // Interpolate from green (low) to yellow (mid) to red (high)
-    if (normalized < 0.5) {
-      // Green to Yellow
-      const t = normalized * 2
-      const r = Math.round(34 + t * (234 - 34))
-      const g = Math.round(197 + t * (179 - 197))
-      const b = Math.round(94 + t * (8 - 94))
-      return `rgb(${r}, ${g}, ${b})`
-    } else {
-      // Yellow to Red
-      const t = (normalized - 0.5) * 2
-      const r = Math.round(234 + t * (239 - 234))
-      const g = Math.round(179 - t * 111)
-      const b = Math.round(8 + t * (68 - 8))
-      return `rgb(${r}, ${g}, ${b})`
-    }
+    return clayRamp(normalized)
   }
 
   if (years.length === 0) {
@@ -266,21 +252,21 @@ export default function SeasonalHeatmap({
   )
 }
 
+// Rampa clay (#f6e2d3 → #5b291f) — matiz único, do ATLAS_CLAY do design system
+const CLAY_LIGHT = [246, 226, 211]
+const CLAY_DARK = [91, 41, 31]
+
+function clayRamp(t) {
+  const clamped = Math.max(0, Math.min(1, t))
+  const r = Math.round(CLAY_LIGHT[0] + (CLAY_DARK[0] - CLAY_LIGHT[0]) * clamped)
+  const g = Math.round(CLAY_LIGHT[1] + (CLAY_DARK[1] - CLAY_LIGHT[1]) * clamped)
+  const b = Math.round(CLAY_LIGHT[2] + (CLAY_DARK[2] - CLAY_LIGHT[2]) * clamped)
+  return `rgb(${r}, ${g}, ${b})`
+}
+
 // Fixed color for legend (not dependent on data)
 function getColorForLegend(normalized) {
-  if (normalized < 0.5) {
-    const t = normalized * 2
-    const r = Math.round(34 + t * (234 - 34))
-    const g = Math.round(197 + t * (179 - 197))
-    const b = Math.round(94 + t * (8 - 94))
-    return `rgb(${r}, ${g}, ${b})`
-  } else {
-    const t = (normalized - 0.5) * 2
-    const r = Math.round(234 + t * (239 - 234))
-    const g = Math.round(179 - t * 111)
-    const b = Math.round(8 + t * (68 - 8))
-    return `rgb(${r}, ${g}, ${b})`
-  }
+  return clayRamp(normalized)
 }
 
 function getRecordMonth(record) {

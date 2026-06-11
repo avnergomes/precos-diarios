@@ -1,16 +1,9 @@
 // ATLAS-A11Y-HEX-SWEPT
 import { useMemo } from 'react'
 import * as d3 from 'd3'
+import { getCategoryColor } from '../utils/format'
 
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-
-const CATEGORY_COLORS = {
-  'Graos': '#009E73',
-  'Pecuaria': '#D55E00',
-  'Cafe': '#6B4423',
-  'Florestal': '#0072B2',
-  'Mandioca': '#CC79A7'
-}
 
 export default function CircularBarChart({
   data,
@@ -100,7 +93,7 @@ export default function CircularBarChart({
     return `R$${v.toFixed(0)}`
   }
 
-  const color = category ? (CATEGORY_COLORS[category] || '#0072B2') : '#0072B2'
+  const color = category ? getCategoryColor(category) : '#0072B2'
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6">

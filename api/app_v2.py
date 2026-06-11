@@ -59,26 +59,19 @@ RATE_LIMIT_WINDOW = 60  # seconds
 
 # API Keys (in production use database/secrets manager)
 # Format: {api_key: {name, tier, requests_per_minute}}
-API_KEYS = {
-    os.environ.get('API_KEY_FREE', 'demo-key-free'): {
-        'name': 'Demo Free',
-        'tier': 'free',
-        'rpm': 10,
-        'daily_limit': 100
-    },
-    os.environ.get('API_KEY_BASIC', 'demo-key-basic'): {
-        'name': 'Demo Basic',
-        'tier': 'basic',
-        'rpm': 60,
-        'daily_limit': 1000
-    },
-    os.environ.get('API_KEY_PRO', 'demo-key-pro'): {
-        'name': 'Demo Pro',
-        'tier': 'pro',
-        'rpm': 300,
-        'daily_limit': 10000
-    },
-}
+# Fail-closed: sem a env var correspondente, o tier fica desabilitado.
+# (Antes havia fallbacks 'demo-key-*' hardcoded, utilizáveis em produção.)
+API_KEYS = {}
+for _env_name, _tier_info in (
+    ('API_KEY_FREE', {'name': 'Free', 'tier': 'free', 'rpm': 10, 'daily_limit': 100}),
+    ('API_KEY_BASIC', {'name': 'Basic', 'tier': 'basic', 'rpm': 60, 'daily_limit': 1000}),
+    ('API_KEY_PRO', {'name': 'Pro', 'tier': 'pro', 'rpm': 300, 'daily_limit': 10000}),
+):
+    _key_value = os.environ.get(_env_name)
+    if _key_value:
+        API_KEYS[_key_value] = _tier_info
+    else:
+        app.logger.warning('%s nao definida; tier %s desabilitado', _env_name, _tier_info['tier'])
 
 # Tier limits configuration for external keys
 TIER_LIMITS = {
@@ -289,7 +282,9 @@ def index():
 
 @app.route('/api/debug/routes')
 def debug_routes():
-    """Debug: List all registered routes."""
+    """Debug: List all registered routes (desabilitado por padrão em produção)."""
+    if os.environ.get('ENABLE_DEBUG_ROUTES') != '1':
+        return jsonify({'error': 'not found'}), 404
     routes = []
     for rule in app.url_map.iter_rules():
         routes.append({

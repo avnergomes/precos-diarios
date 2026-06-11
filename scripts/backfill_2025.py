@@ -35,7 +35,7 @@ def load_known_ids() -> set:
     """Load IDs already present in links.txt."""
     known = set()
     if LINKS_FILE.exists():
-        with open(LINKS_FILE, 'r') as f:
+        with open(LINKS_FILE, 'r', encoding='utf-8') as f:
             for line in f:
                 m = re.search(r'SIMA-(\d+)', line, re.IGNORECASE)
                 if m:

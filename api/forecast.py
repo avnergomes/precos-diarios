@@ -132,7 +132,7 @@ class PriceForecaster:
             try:
                 adf_result = adfuller(series, autolag='AIC')
                 d = 0 if adf_result[1] < 0.05 else 1
-            except:
+            except Exception:
                 d = 1
 
             # Simple parameter selection
@@ -147,7 +147,7 @@ class PriceForecaster:
                         if fitted.aic < best_aic:
                             best_aic = fitted.aic
                             best_order = (p, d, q)
-                    except:
+                    except Exception:
                         continue
 
             # Fit final model
@@ -393,7 +393,7 @@ class PriceForecaster:
                 'rmse': round(rmse, 2),
                 'mape': round(mape, 2),
             }
-        except:
+        except Exception:
             return {'mae': None, 'rmse': None, 'mape': None}
 
     def _calculate_metrics_prophet(self) -> Dict:
@@ -414,7 +414,7 @@ class PriceForecaster:
                 'rmse': round(rmse, 2),
                 'mape': round(mape, 2),
             }
-        except:
+        except Exception:
             return {'mae': None, 'rmse': None, 'mape': None}
 
     def get_historical_data(self, months: int = 24) -> List[Dict]:

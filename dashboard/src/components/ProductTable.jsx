@@ -292,7 +292,7 @@ export default function ProductTable({
                 <td className="px-3 py-3 text-right">
                   {item.variacao !== undefined && item.variacao !== null ? (
                     <span className={`inline-flex items-center gap-1 font-medium ${
-                      item.variacao >= 0 ? 'text-green-600' : 'text-red-600'
+                      item.variacao >= 0 ? 'text-sky-700' : 'text-orange-700'
                     }`}>
                       {item.variacao >= 0 ? (
                         <TrendingUp className="w-3 h-3" />

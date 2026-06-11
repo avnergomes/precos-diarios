@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import { useData, useFilteredData, useAggregations, useFilteredTimeSeries } from './hooks/useData'
 import { useForecast, useForecastProducts } from './hooks/useForecast'
 import Header from './components/Header'
@@ -24,7 +24,7 @@ import { formatCategoryName } from './utils/format'
 import { TrendingUp, BarChart3, Package, LineChart, Radar } from 'lucide-react'
 
 function App() {
-  const { data, loading, error } = useData()
+  const { data, loading, error, loadRegionalDetail } = useData()
   const [filters, setFilters] = useState({
     anoMin: null,
     anoMax: null,
@@ -32,6 +32,11 @@ function App() {
     produto: null,
     regional: null,
   })
+
+  // detailed_regional.json (~33 MB) é carregado sob demanda, na primeira regional escolhida
+  useEffect(() => {
+    if (filters.regional) loadRegionalDetail()
+  }, [filters.regional, loadRegionalDetail])
 
   // API Modal state
   const [isApiModalOpen, setIsApiModalOpen] = useState(false)
@@ -81,7 +86,7 @@ function App() {
       : 'Todas as categorias'
     const productLabel = filters.produto || 'Todos os produtos'
 
-    return `Periodo: ${periodLabel} | Regional: ${regionalLabel} | Categoria: ${categoryLabel} | Produto: ${productLabel}`
+    return `Período: ${periodLabel} | Regional: ${regionalLabel} | Categoria: ${categoryLabel} | Produto: ${productLabel}`
   }, [filters, metadata])
 
   const contextLabel = useMemo(() => {
@@ -185,20 +190,20 @@ function App() {
           <SeasonalHeatmap
             data={filteredData}
             title="Sazonalidade (meses x anos)"
-            description="Intensidade de precos por mes e ano."
+            description="Intensidade de preços por mês e ano."
           />
 
           {/* Advanced D3 Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <CircularBarChart
               data={filteredTimeSeries}
-              title="Padrao Sazonal (Radial)"
+              title="Padrão Sazonal (Radial)"
               width={380}
               height={380}
             />
             <RidgelineChart
               data={filteredTimeSeries}
-              title="Distribuicao de Precos por Ano"
+              title="Distribuição de Preços por Ano"
             />
           </div>
         </section>
@@ -294,7 +299,7 @@ function App() {
             </div>
             <div>
               <h2 className="text-xl font-semibold text-dark-800">Produtos</h2>
-              <p className="text-sm text-dark-500">Ranking com preco medio, variacao e tendencia</p>
+              <p className="text-sm text-dark-500">Ranking com preço médio, variação e tendência</p>
             </div>
           </div>
 

@@ -15,8 +15,8 @@ const MODEL_COLORS = {
   arima: 'text-blue-600',
   auto_arima: 'text-cyan-600',
   random_forest: 'text-orange-600',
-  xgboost: 'text-red-600',
-  prophet: 'text-green-600',
+  xgboost: 'text-orange-800',
+  prophet: 'text-sky-800',
 }
 
 export default function ForecastTable({
