@@ -38,6 +38,9 @@ jobs:
         env:
           VITE_APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
           VITE_TRACKING_URL: ${{ secrets.TRACKING_URL }}
+          # Dashboard consumes the live API (/api/data/<file>) first, with the
+          # static JSON bundled in the build as automatic fallback.
+          VITE_API_URL: https://precos-diarios-api.onrender.com
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

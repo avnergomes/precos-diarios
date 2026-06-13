@@ -1,10 +1,32 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 
-// API URL from environment variable or fallback to local data
+// Data source: when VITE_API_URL is set, the dashboard consumes the live API
+// (/api/data/<file>) first; on any failure it transparently falls back to the
+// static JSON bundled with the site. The free Render instance hibernates and can
+// be slow/unavailable, so the static copy keeps the dashboard resilient.
 const API_URL = import.meta.env.VITE_API_URL
-const DATA_BASE_PATH = API_URL
-  ? `${API_URL}/api/data/`
-  : import.meta.env.BASE_URL + 'data/'
+const STATIC_BASE = import.meta.env.BASE_URL + 'data/'
+const API_BASE = API_URL ? `${API_URL}/api/data/` : null
+
+// Fetch a JSON data file: live API first (when configured), static fallback on
+// any non-OK response or network error. AbortErrors propagate (request cancelled).
+async function fetchData(filename, opts) {
+  const candidates = API_BASE
+    ? [API_BASE + filename, STATIC_BASE + filename]
+    : [STATIC_BASE + filename]
+  let lastError
+  for (const url of candidates) {
+    try {
+      const response = await fetch(url, opts)
+      if (response.ok) return await response.json()
+      lastError = new Error(`HTTP ${response.status} for ${filename}`)
+    } catch (err) {
+      if (err.name === 'AbortError') throw err
+      lastError = err
+    }
+  }
+  throw lastError || new Error(`Failed to load ${filename}`)
+}
 
 export function useData() {
   const [data, setData] = useState(null)
@@ -22,24 +44,12 @@ export function useData() {
         setLoading(true)
         setError(null)
 
-        // Load core data files
+        // Load core data files (API-first, static fallback per file)
         const [aggregated, detailed, timeseries, filters] = await Promise.all([
-          fetch(DATA_BASE_PATH + 'aggregated.json', { signal }).then(r => {
-            if (!r.ok) throw new Error('Failed to load aggregated.json')
-            return r.json()
-          }),
-          fetch(DATA_BASE_PATH + 'detailed.json', { signal }).then(r => {
-            if (!r.ok) throw new Error('Failed to load detailed.json')
-            return r.json()
-          }),
-          fetch(DATA_BASE_PATH + 'timeseries.json', { signal }).then(r => {
-            if (!r.ok) throw new Error('Failed to load timeseries.json')
-            return r.json()
-          }),
-          fetch(DATA_BASE_PATH + 'filters.json', { signal }).then(r => {
-            if (!r.ok) throw new Error('Failed to load filters.json')
-            return r.json()
-          }),
+          fetchData('aggregated.json', { signal }),
+          fetchData('detailed.json', { signal }),
+          fetchData('timeseries.json', { signal }),
+          fetchData('filters.json', { signal }),
         ])
 
         if (signal.aborted) return
@@ -49,8 +59,7 @@ export function useData() {
         let regionalFilters = null
 
         try {
-          regionalFilters = await fetch(DATA_BASE_PATH + 'regional_filters.json', { signal })
-            .then(r => r.ok ? r.json() : null)
+          regionalFilters = await fetchData('regional_filters.json', { signal })
         } catch (err) {
           if (err.name !== 'AbortError') {
             console.warn('Regional data not available:', err)
@@ -93,8 +102,7 @@ export function useData() {
     if (regionalRequestedRef.current) return
     regionalRequestedRef.current = true
     setRegionalDetailLoading(true)
-    fetch(DATA_BASE_PATH + 'detailed_regional.json')
-      .then(r => r.ok ? r.json() : null)
+    fetchData('detailed_regional.json')
       .catch(() => null)
       .then(regDetailed => {
         if (regDetailed?.records?.length) {
