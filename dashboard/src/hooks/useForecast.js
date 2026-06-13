@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-
-const BASE = import.meta.env.BASE_URL || '/'
+import { fetchData } from '../lib/apiData'
 
 /**
  * Hook to load pre-computed forecast for a product (static JSON).
@@ -21,14 +20,7 @@ export function useForecast(produto, horizonte = 30) {
 
     try {
       const slug = produto.slug || produto
-      const url = `${BASE}data/forecasts/${encodeURIComponent(slug)}.json`
-      const response = await fetch(url)
-
-      if (!response.ok) {
-        throw new Error(`Previsão não disponível (${response.status})`)
-      }
-
-      const result = await response.json()
+      const result = await fetchData(`forecasts/${encodeURIComponent(slug)}.json`)
 
       if (!result.success) {
         throw new Error(result.error || 'Falha ao carregar previsão')
@@ -78,14 +70,7 @@ export function useForecastProducts() {
 
     async function load() {
       try {
-        const url = `${BASE}data/forecast_products.json`
-        const response = await fetch(url, { signal })
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
-        }
-
-        const result = await response.json()
+        const result = await fetchData('forecast_products.json', { signal })
         if (!signal.aborted) {
           setProducts(result.produtos || [])
         }

@@ -1,32 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-
-// Data source: when VITE_API_URL is set, the dashboard consumes the live API
-// (/api/data/<file>) first; on any failure it transparently falls back to the
-// static JSON bundled with the site. The free Render instance hibernates and can
-// be slow/unavailable, so the static copy keeps the dashboard resilient.
-const API_URL = import.meta.env.VITE_API_URL
-const STATIC_BASE = import.meta.env.BASE_URL + 'data/'
-const API_BASE = API_URL ? `${API_URL}/api/data/` : null
-
-// Fetch a JSON data file: live API first (when configured), static fallback on
-// any non-OK response or network error. AbortErrors propagate (request cancelled).
-async function fetchData(filename, opts) {
-  const candidates = API_BASE
-    ? [API_BASE + filename, STATIC_BASE + filename]
-    : [STATIC_BASE + filename]
-  let lastError
-  for (const url of candidates) {
-    try {
-      const response = await fetch(url, opts)
-      if (response.ok) return await response.json()
-      lastError = new Error(`HTTP ${response.status} for ${filename}`)
-    } catch (err) {
-      if (err.name === 'AbortError') throw err
-      lastError = err
-    }
-  }
-  throw lastError || new Error(`Failed to load ${filename}`)
-}
+import { fetchData } from '../lib/apiData'
 
 export function useData() {
   const [data, setData] = useState(null)
