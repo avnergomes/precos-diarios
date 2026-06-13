@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Key, Copy, Check, ExternalLink, AlertCircle } from 'lucide-react'
 
-const API_BASE_URL = 'https://precos-diarios.onrender.com'
+const API_BASE_URL = 'https://precos-diarios-api.onrender.com'
 
 export default function ApiModal({ isOpen, onClose, appsScriptUrl }) {
   const [formData, setFormData] = useState({ nome: '', email: '', uso: '' })
