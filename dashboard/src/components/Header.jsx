@@ -34,10 +34,11 @@ export default function Header({ metadata, productCount, onOpenApiModal }) {
         </svg>
       </div>
 
-      {/* API Button */}
+      {/* API Button — deslocado para a esquerda do seletor de idioma fixo
+          (.lang-fixed, canto superior direito) para não ficar coberto por ele. */}
       <button
         onClick={onOpenApiModal}
-        className="absolute top-4 right-4 z-10 flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg backdrop-blur-sm transition-colors"
+        className="absolute top-4 right-40 sm:right-56 z-10 flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg backdrop-blur-sm transition-colors"
       >
         <Key className="w-4 h-4" />
         <span className="font-medium text-sm">API</span>

@@ -2,14 +2,14 @@
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { formatCurrency } from '../utils/format'
 
-// Same palette as ForecastChart
+// Same palette as ForecastChart (Okabe-Ito, daltonic-safe)
 const MODEL_META = {
-  linear:        { color: '#CC79A7', bg: 'bg-purple-100', text: 'text-purple-600', label: 'Regressão Linear' },
-  arima:         { color: '#3b82f6', bg: 'bg-blue-100',   text: 'text-blue-600',   label: 'ARIMA' },
-  auto_arima:    { color: '#06b6d4', bg: 'bg-cyan-100',   text: 'text-cyan-600',   label: 'Auto ARIMA' },
-  random_forest: { color: '#f97316', bg: 'bg-orange-100', text: 'text-orange-600',  label: 'Random Forest' },
-  xgboost:       { color: '#D55E00', bg: 'bg-orange-100', text: 'text-orange-800', label: 'XGBoost' },
-  prophet:       { color: '#0072B2', bg: 'bg-sky-100',    text: 'text-sky-800',    label: 'Prophet' },
+  linear:        { color: '#CC79A7', bg: 'bg-purple-100',  text: 'text-purple-600',  label: 'Regressão Linear' },
+  arima:         { color: '#0072B2', bg: 'bg-sky-100',     text: 'text-sky-800',     label: 'ARIMA' },
+  auto_arima:    { color: '#009E73', bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Auto ARIMA' },
+  random_forest: { color: '#E69F00', bg: 'bg-amber-100',   text: 'text-amber-700',   label: 'Random Forest' },
+  xgboost:       { color: '#D55E00', bg: 'bg-orange-100',  text: 'text-orange-800',  label: 'XGBoost' },
+  prophet:       { color: '#56B4E9', bg: 'bg-sky-100',     text: 'text-sky-600',     label: 'Prophet' },
 }
 
 function getMeta(key) {
@@ -66,7 +66,7 @@ export default function ForecastKpis({ modelos = {}, historico = [], horizon = 3
               <p className="text-xl font-bold" style={{ color: meta.color }}>
                 {formatCurrency(forecast)}
               </p>
-              <p className={`text-sm flex items-center gap-1 ${variation >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <p className={`text-sm flex items-center gap-1 ${variation >= 0 ? 'text-sky-700' : 'text-orange-700'}`}>
                 {variation >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                 {variation >= 0 ? '+' : ''}{variation.toFixed(1)}%
               </p>

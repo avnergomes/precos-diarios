@@ -64,14 +64,16 @@ export default function LollipopChart({
     .padding(0.35)
 
   const formatValue = (v) => {
-    if (v >= 1000) return `R$ ${(v/1000).toFixed(1)}K`
-    return `R$ ${v.toFixed(2)}`
+    if (v >= 1000) return `R$ ${(v/1000).toFixed(1).replace('.', ',')} mil`
+    return `R$ ${v.toFixed(2).replace('.', ',')}`
   }
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6">
       <h3 className="text-lg font-semibold text-slate-700 mb-4">{title}</h3>
 
+      {/* Scroll contido no card: o SVG de largura fixa não estoura a página em telas estreitas */}
+      <div className="overflow-x-auto">
       <svg width={width} height={height}>
         <g transform={`translate(${MARGIN.left}, ${MARGIN.top})`}>
           {/* Grid lines */}
@@ -180,6 +182,7 @@ export default function LollipopChart({
           })}
         </g>
       </svg>
+      </div>
 
       {/* Legend — derivada das categorias presentes nos dados */}
       <div className="mt-4 flex flex-wrap items-center justify-center gap-4">

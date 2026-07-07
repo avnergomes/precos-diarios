@@ -13,22 +13,27 @@ import {
   ReferenceArea,
 } from 'recharts'
 import { formatCurrency } from '../utils/format'
+import { ATLAS_CATEGORICAL } from '../utils/chart-palette'
 
+// Cores Okabe-Ito bem separadas + tracejado distinto por modelo, para que
+// linhas sobrepostas não dependam só da cor (daltonismo / brilho baixo).
 const MODEL_STYLES = {
-  linear:        { color: '#CC79A7', label: 'Regressão Linear' },
-  arima:         { color: '#3b82f6', label: 'ARIMA' },
-  auto_arima:    { color: '#06b6d4', label: 'Auto ARIMA' },
-  random_forest: { color: '#f97316', label: 'Random Forest' },
-  xgboost:       { color: '#D55E00', label: 'XGBoost' },
-  prophet:       { color: '#0072B2', label: 'Prophet' },
+  linear:        { color: '#CC79A7', dash: '2 3',      label: 'Regressão Linear' },
+  arima:         { color: '#0072B2', dash: '6 3',      label: 'ARIMA' },
+  auto_arima:    { color: '#009E73', dash: '10 4',     label: 'Auto ARIMA' },
+  random_forest: { color: '#E69F00', dash: '10 4 2 4', label: 'Random Forest' },
+  xgboost:       { color: '#D55E00', dash: '4 3 1 3',  label: 'XGBoost' },
+  prophet:       { color: '#56B4E9', dash: '14 4',     label: 'Prophet' },
 }
 
-const FALLBACK_COLORS = ['#7a4e88', '#ec4899', '#14b8a6', '#eab308']
+const FALLBACK_COLORS = ATLAS_CATEGORICAL
+const FALLBACK_DASHES = ['6 3', '2 3', '10 4', '10 4 2 4']
 
 function getModelStyle(key, index) {
   if (MODEL_STYLES[key]) return MODEL_STYLES[key]
   return {
     color: FALLBACK_COLORS[index % FALLBACK_COLORS.length],
+    dash: FALLBACK_DASHES[index % FALLBACK_DASHES.length],
     label: key,
   }
 }
@@ -351,7 +356,7 @@ export default function ForecastChart({
                 dataKey={key}
                 stroke={style.color}
                 strokeWidth={isBest ? 2.5 : 1.5}
-                strokeDasharray={isBest ? undefined : '6 3'}
+                strokeDasharray={isBest ? undefined : (style.dash || '6 3')}
                 dot={false}
                 connectNulls
                 legendType="none"

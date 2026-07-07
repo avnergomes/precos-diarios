@@ -17,13 +17,15 @@ export default function KpiCards({ aggregations, contextLabel = 'recorte atual' 
       iconColor: 'text-primary-600',
     },
     {
+      // Alta/queda em azul/laranja (padrão daltônico do ecossistema);
+      // os ícones TrendingUp/Down dão a redundância não cromática.
       title: 'Variação anual',
       value: yoyFormatted,
       description: `Comparado ao ano anterior no ${contextLabel}`,
       icon: yoyChange >= 0 ? TrendingUp : TrendingDown,
-      color: yoyChange >= 0 ? 'from-green-500 to-green-600' : 'from-red-500 to-red-600',
-      iconBg: yoyChange >= 0 ? 'bg-green-100' : 'bg-red-100',
-      iconColor: yoyChange >= 0 ? 'text-green-600' : 'text-red-600',
+      color: yoyChange >= 0 ? 'from-sky-500 to-sky-600' : 'from-orange-500 to-orange-600',
+      iconBg: yoyChange >= 0 ? 'bg-sky-100' : 'bg-orange-100',
+      iconColor: yoyChange >= 0 ? 'text-sky-700' : 'text-orange-700',
     },
     {
       title: 'Total de registros',

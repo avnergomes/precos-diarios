@@ -12,7 +12,7 @@ export default function Loading() {
         </div>
         <p className="mt-4 text-dark-600 font-medium">Carregando dados...</p>
         <p className="text-sm text-dark-400">
-          Aguarde um momento. Se demorar, recarregue a página.
+          Aguarde um momento. Se o servidor de dados estiver iniciando, a cópia local do site é usada automaticamente.
         </p>
       </div>
     </div>

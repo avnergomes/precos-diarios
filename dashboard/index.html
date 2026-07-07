@@ -39,6 +39,24 @@
           bar.appendChild(a);
           bar.appendChild(btn);
           document.body.appendChild(bar);
+
+          // Empilha acima do banner LGPD quando ele estiver visível, para que
+          // texto e botão "Entendi" continuem visíveis e clicáveis.
+          function stackAboveLgpd() {
+            var lg = document.getElementById('lgpd-banner');
+            var visible = lg && lg.style.display !== 'none' && lg.offsetHeight > 0;
+            bar.style.bottom = visible ? lg.offsetHeight + 'px' : '0';
+          }
+          stackAboveLgpd();
+          window.addEventListener('resize', stackAboveLgpd);
+          window.addEventListener('load', stackAboveLgpd);
+          var lg = document.getElementById('lgpd-banner');
+          var lgBtn = lg ? lg.querySelector('button') : null;
+          if (lgBtn) {
+            lgBtn.addEventListener('click', function () {
+              setTimeout(stackAboveLgpd, 0);
+            });
+          }
         }
         if (document.readyState === 'loading') {
           document.addEventListener('DOMContentLoaded', mount);

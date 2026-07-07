@@ -316,9 +316,9 @@ export default function ProductTable({
                       />
                       <span className={`text-xs ${
                         trend.direction > 0
-                          ? 'text-green-600'
+                          ? 'text-sky-700'
                           : trend.direction < 0
-                            ? 'text-red-600'
+                            ? 'text-orange-700'
                             : 'text-dark-400'
                       }`}>
                         {trend.label}

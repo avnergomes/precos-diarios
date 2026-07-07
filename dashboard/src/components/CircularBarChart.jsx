@@ -89,8 +89,8 @@ export default function CircularBarChart({
   const gridLevels = [0.25, 0.5, 0.75, 1.0]
 
   const formatValue = (v) => {
-    if (v >= 1000) return `R$${(v/1000).toFixed(0)}K`
-    return `R$${v.toFixed(0)}`
+    if (v >= 1000) return `R$ ${(v/1000).toFixed(1).replace('.', ',')} mil`
+    return `R$ ${v.toFixed(0)}`
   }
 
   const color = category ? getCategoryColor(category) : '#0072B2'
@@ -102,6 +102,8 @@ export default function CircularBarChart({
         <p className="text-sm text-slate-500 mb-4">Categoria: {category}</p>
       )}
 
+      {/* Scroll contido no card: o SVG de largura fixa não estoura a página em telas estreitas */}
+      <div className="overflow-x-auto">
       <svg width={width} height={height} className="mx-auto">
         <g transform={`translate(${centerX}, ${centerY})`}>
           {/* Grid circles */}
@@ -219,6 +221,7 @@ export default function CircularBarChart({
           </text>
         </g>
       </svg>
+      </div>
 
       {/* Summary stats */}
       <div className="mt-4 grid grid-cols-3 gap-4 text-center border-t pt-4">

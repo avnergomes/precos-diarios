@@ -20,11 +20,19 @@ import SectionNav from './components/SectionNav'
 import LollipopChart from './components/LollipopChart'
 import CircularBarChart from './components/CircularBarChart'
 import RidgelineChart from './components/RidgelineChart'
-import { formatCategoryName } from './utils/format'
+import { formatCategoryName, formatCurrency } from './utils/format'
 import { TrendingUp, BarChart3, Package, LineChart, Radar } from 'lucide-react'
 
 function App() {
-  const { data, loading, error, loadRegionalDetail } = useData()
+  const {
+    data,
+    loading,
+    error,
+    usedStaticFallback,
+    loadRegionalDetail,
+    regionalDetailLoading,
+    regionalDetailError,
+  } = useData()
   const [filters, setFilters] = useState({
     anoMin: null,
     anoMax: null,
@@ -146,6 +154,38 @@ function App() {
           {filterSummary}
         </div>
 
+        {/* Static fallback notice */}
+        {usedStaticFallback && (
+          <div className="text-xs text-dark-400">
+            Servidor de dados indisponível no momento; exibindo cópia local dos dados.
+          </div>
+        )}
+
+        {/* Regional detail loading / error feedback */}
+        {filters.regional && !data?.hasRegionalData && regionalDetailLoading && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-800 text-sm flex items-center gap-3">
+            <div className="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full shrink-0" />
+            <span>
+              <strong>Carregando dados regionais (aproximadamente 32 MB)...</strong>{' '}
+              Até concluir, os gráficos mostram os dados do estado inteiro, sem o filtro de regional.
+            </span>
+          </div>
+        )}
+        {filters.regional && !data?.hasRegionalData && !regionalDetailLoading && regionalDetailError && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-sm flex flex-wrap items-center justify-between gap-3">
+            <span>
+              Não foi possível carregar os dados regionais. Os gráficos continuam mostrando os dados do estado inteiro.
+            </span>
+            <button
+              type="button"
+              onClick={loadRegionalDetail}
+              className="btn-secondary shrink-0"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
+
         {/* Global No Data Banner */}
         {filteredData.length === 0 && (filters.produto || filters.categoria || filters.regional || filters.anoMin || filters.anoMax) && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-sm">
@@ -266,13 +306,13 @@ function App() {
                       >
                         <td className="px-4 py-3 font-medium">{formatCategoryName(cat)}</td>
                         <td className="px-4 py-3 text-right">
-                          R$ {stats.media?.toFixed(2)}
+                          {formatCurrency(stats.media)}
                         </td>
                         <td className="px-4 py-3 text-right text-dark-500">
-                          R$ {stats.minimo?.toFixed(2)}
+                          {formatCurrency(stats.minimo)}
                         </td>
                         <td className="px-4 py-3 text-right text-dark-500">
-                          R$ {stats.maximo?.toFixed(2)}
+                          {formatCurrency(stats.maximo)}
                         </td>
                         <td className="px-4 py-3 text-right">
                           {stats.registros?.toLocaleString('pt-BR')}
@@ -306,7 +346,7 @@ function App() {
           {/* Lollipop Chart - Top Products by Price */}
           <LollipopChart
             data={aggregations?.topProducts}
-            title="Top 15 Produtos por Preco Medio"
+            title="Top 15 Produtos por Preço Médio"
             width={700}
             height={500}
           />

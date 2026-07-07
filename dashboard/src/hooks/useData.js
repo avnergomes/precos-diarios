@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { fetchData } from '../lib/apiData'
+import { fetchData, wasStaticFallbackUsed } from '../lib/apiData'
 
 export function useData() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [usedStaticFallback, setUsedStaticFallback] = useState(false)
   const [regionalDetailLoading, setRegionalDetailLoading] = useState(false)
+  const [regionalDetailError, setRegionalDetailError] = useState(false)
   const regionalRequestedRef = useRef(false)
 
   useEffect(() => {
@@ -52,6 +54,7 @@ export function useData() {
             filters: normalizedFilters,
             hasRegionalData: false,
           })
+          setUsedStaticFallback(wasStaticFallbackUsed())
         }
       } catch (err) {
         if (err.name !== 'AbortError' && !signal.aborted) {
@@ -71,10 +74,12 @@ export function useData() {
 
   // Carrega o detalhamento regional (~33 MB) só quando o usuário seleciona
   // uma regional. Até lá, a UI usa os dados agregados normalmente.
+  // Em caso de falha, libera o ref para permitir "Tentar novamente" sem reload.
   const loadRegionalDetail = useCallback(() => {
     if (regionalRequestedRef.current) return
     regionalRequestedRef.current = true
     setRegionalDetailLoading(true)
+    setRegionalDetailError(false)
     fetchData('detailed_regional.json')
       .catch(() => null)
       .then(regDetailed => {
@@ -82,12 +87,23 @@ export function useData() {
           setData(prev => prev
             ? { ...prev, detailedRegional: regDetailed, hasRegionalData: true }
             : prev)
+        } else {
+          regionalRequestedRef.current = false
+          setRegionalDetailError(true)
         }
       })
       .finally(() => setRegionalDetailLoading(false))
   }, [])
 
-  return { data, loading, error, loadRegionalDetail, regionalDetailLoading }
+  return {
+    data,
+    loading,
+    error,
+    usedStaticFallback,
+    loadRegionalDetail,
+    regionalDetailLoading,
+    regionalDetailError,
+  }
 }
 
 function normalizeFilters(filtersJson, aggregated, detailed, regionalFilters) {

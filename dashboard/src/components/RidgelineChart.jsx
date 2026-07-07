@@ -4,10 +4,12 @@ import * as d3 from 'd3'
 
 const MARGIN = { top: 30, right: 30, bottom: 40, left: 60 }
 
-// Color scale for years (green gradient)
+// Rampa sequencial mono-matiz (azul ATLAS_WATER interpolado em 10 passos):
+// luminância decresce monotonicamente do ano mais antigo (claro) ao mais
+// recente (escuro), legível também para daltonismo e escala de cinza.
 const YEAR_COLORS = [
-  '#d9e6f0', '#bbf7d0', '#87afcd', '#4ade80', '#0072B2',
-  '#005c8e', '#004a72', '#166534', '#003356', '#052e16'
+  '#d9e6f0', '#c7d9e8', '#b4cce0', '#9ebed7', '#87afcd',
+  '#6291b5', '#3d729c', '#316083', '#254e69', '#1a3445'
 ]
 
 export default function RidgelineChart({
@@ -113,8 +115,8 @@ export default function RidgelineChart({
     .curve(d3.curveBasis)
 
   const formatValue = (v) => {
-    if (v >= 1000) return `R$${(v/1000).toFixed(0)}K`
-    return `R$${v.toFixed(0)}`
+    if (v >= 1000) return `R$ ${(v/1000).toFixed(1).replace('.', ',')} mil`
+    return `R$ ${v.toFixed(0)}`
   }
 
   return (
@@ -259,7 +261,7 @@ export default function RidgelineChart({
         <div className="flex items-center gap-2">
           <span className="text-slate-500">Evolução:</span>
           <div className="flex">
-            {YEAR_COLORS.slice(0, 6).map((color, i) => (
+            {YEAR_COLORS.map((color, i) => (
               <div key={i} className="w-4 h-3" style={{ backgroundColor: color }} />
             ))}
           </div>
