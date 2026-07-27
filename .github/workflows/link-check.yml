@@ -37,6 +37,16 @@ jobs:
         working-directory: dashboard
         run: npm run build
 
+      # O Vite usa base '/precos-diarios/', entao o HTML gerado referencia
+      # "/precos-diarios/assets/...". O lychee resolve links root-relative
+      # contra --root-dir, logo espelhamos o dist sob esse mesmo prefixo para
+      # que os caminhos absolutos batam com o disco.
+      - name: Stage built site under its base path
+        run: |
+          rm -rf _linkcheck
+          mkdir -p _linkcheck/precos-diarios
+          cp -r dashboard/dist/. _linkcheck/precos-diarios/
+
       - name: Link Checker
         uses: lycheeverse/lychee-action@v2
         with:
@@ -45,6 +55,7 @@ jobs:
             --verbose
             --no-progress
             --accept 200,204,301,302,403,429,503
+            --root-dir "${{ github.workspace }}/_linkcheck"
             --exclude "^mailto:"
             --exclude "^https://script.google.com"
             --exclude "^https://www.linkedin.com"
@@ -52,7 +63,7 @@ jobs:
             --exclude-path node_modules
             --exclude-path dashboard/node_modules
             --timeout 30
-            "./dashboard/dist/**/*.html"
+            "./_linkcheck/precos-diarios/**/*.html"
             "./README.md"
             "./SEO_REPORT.md"
         env:

@@ -12,6 +12,7 @@ node_modules/
 dist/
 build/
 .vite/
+_linkcheck/
 
 # Environment
 # Nota: data-pipeline.yml faz "git add -A", que estagia arquivos nao
