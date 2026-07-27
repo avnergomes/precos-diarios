@@ -236,23 +236,36 @@ def step_forecasts():
         raise RuntimeError("Forecast generation failed")
 
 
+# Exit codes consumed by .github/workflows/data-pipeline.yml.
+# These must stay distinct: an upstream failure must never be indistinguishable
+# from "SIMA published nothing today", otherwise a broken scraper reports as a
+# green run that simply had nothing to commit.
+EXIT_CHANGED = 0      # new data committed
+EXIT_ERROR = 1        # a step failed; needs investigation
+EXIT_NO_CHANGES = 2   # ran cleanly, upstream had nothing new
+
+
 def main():
     logger.info("=" * 60)
     logger.info("SIMA Daily Quotations - Incremental Update")
     logger.info("=" * 60)
 
+    errors = []
+
     # Step 1: Scrape
     try:
         new_files = step_scrape()
     except Exception as e:
-        logger.error(f"Scraper failed: {e}")
+        logger.exception("Scraper failed")
+        errors.append(f"scrape: {e}")
         new_files = []
 
     # Step 2: Process new files (aggregated)
     try:
         has_new_data = step_process_new_files(new_files)
     except Exception as e:
-        logger.error(f"Processing failed: {e}")
+        logger.exception("Processing failed")
+        errors.append(f"process: {e}")
         has_new_data = False
 
     # Step 2b: Process new files (regional)
@@ -261,9 +274,17 @@ def main():
         if has_regional_data:
             has_new_data = True
     except Exception as e:
-        logger.error(f"Regional processing failed: {e}")
+        logger.exception("Regional processing failed")
+        errors.append(f"process_regional: {e}")
 
     if not has_new_data:
+        # An upstream step blew up: do not report this as "nothing new".
+        if errors:
+            logger.error(
+                "No new data, but %d step(s) failed: %s", len(errors), "; ".join(errors)
+            )
+            return EXIT_ERROR
+
         logger.info("No new data found. Checking if JSON files need regeneration...")
         # Still regenerate if dashboard JSONs don't exist
         if not (DASHBOARD_DATA_DIR / "aggregated.json").exists():
@@ -271,16 +292,15 @@ def main():
             has_new_data = True
         else:
             logger.info("Everything up to date. Nothing to do.")
-            return False
+            return EXIT_NO_CHANGES
 
     # Step 3: Preprocess
-    preprocess_success = False
     try:
         step_preprocess()
-        preprocess_success = True
     except Exception as e:
-        logger.error(f"Preprocessing failed: {e}")
-        return False
+        logger.exception("Preprocessing failed")
+        errors.append(f"preprocess: {e}")
+        return EXIT_ERROR
 
     # Step 4: Copy JSONs
     copy_success = False
@@ -288,29 +308,37 @@ def main():
         step_copy_json()
         copy_success = True
     except Exception as e:
-        logger.error(f"Copy failed: {e}")
+        logger.exception("Copy failed")
+        errors.append(f"copy_json: {e}")
 
     # Step 5: Forecasts
     try:
         step_forecasts()
     except Exception as e:
-        logger.error(f"Forecast generation failed: {e}")
+        logger.exception("Forecast generation failed")
+        errors.append(f"forecasts: {e}")
         # Non-fatal: dashboard still works without new forecasts
 
     # Only delete Excel files AFTER confirmed successful processing
-    if has_new_data and preprocess_success and copy_success and DAILY_DIR.exists():
+    if copy_success and DAILY_DIR.exists():
         for f in new_files:
             if f.exists():
                 f.unlink()
         logger.info(f"Cleaned up {len(new_files)} temporary Excel files")
 
+    if errors:
+        logger.error(
+            "Update produced data but %d step(s) failed: %s",
+            len(errors),
+            "; ".join(errors),
+        )
+        return EXIT_ERROR
+
     logger.info("=" * 60)
     logger.info("Incremental update complete!")
     logger.info("=" * 60)
-    return True
+    return EXIT_CHANGED
 
 
 if __name__ == "__main__":
-    changed = main()
-    # Exit code 0 if data changed (commit needed), 1 if no changes
-    sys.exit(0 if changed else 1)
+    sys.exit(main())

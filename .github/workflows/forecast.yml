@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write  # required by createWorkflowDispatch (deploy.yml trigger)
 
 jobs:
   forecast:
@@ -44,9 +45,20 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'deploy.yml',
-              ref: 'main'
-            })
+            // Retry: concurrent dispatches from data-pipeline.yml can transiently 409/500.
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              try {
+                await github.rest.actions.createWorkflowDispatch({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  workflow_id: 'deploy.yml',
+                  ref: 'main'
+                });
+                core.info(`deploy.yml dispatched (attempt ${attempt})`);
+                return;
+              } catch (err) {
+                core.warning(`dispatch attempt ${attempt} failed: ${err.status} ${err.message}`);
+                if (attempt === 3) throw err;
+                await new Promise(r => setTimeout(r, 5000 * attempt));
+              }
+            }
