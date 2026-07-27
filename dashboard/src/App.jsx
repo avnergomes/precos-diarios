@@ -1,27 +1,35 @@
-import { useMemo, useState, useCallback, useEffect } from 'react'
+import { useMemo, useState, useCallback, useEffect, lazy, Suspense } from 'react'
 import { useData, useFilteredData, useAggregations, useFilteredTimeSeries } from './hooks/useData'
 import { useForecast, useForecastProducts } from './hooks/useForecast'
 import Header from './components/Header'
 import ApiModal from './components/ApiModal'
 import Filters from './components/Filters'
 import KpiCards from './components/KpiCards'
-import TimeSeriesChart from './components/TimeSeriesChart'
-import CategoryChart from './components/CategoryChart'
 import ProductTable from './components/ProductTable'
 import LatestPrices from './components/LatestPrices'
 import SeasonalHeatmap from './components/SeasonalHeatmap'
-import ForecastChart from './components/ForecastChart'
 import ForecastKpis from './components/ForecastKpis'
 import ForecastTable from './components/ForecastTable'
 import Footer from './components/Footer'
 import Loading from './components/Loading'
 import SectionNav from './components/SectionNav'
 // Advanced D3 Charts
-import LollipopChart from './components/LollipopChart'
-import CircularBarChart from './components/CircularBarChart'
-import RidgelineChart from './components/RidgelineChart'
+import ChartFallback from './components/ChartFallback'
 import { formatCategoryName, formatCurrency } from './utils/format'
 import { TrendingUp, BarChart3, Package, LineChart, Radar } from 'lucide-react'
+
+// Graficos carregados sob demanda. recharts + d3 respondiam pela maior parte
+// dos 788 kB do bundle inicial, e como a pagina e renderizada no cliente nada
+// pintava enquanto esse JS baixava e executava (FCP medido em ~4.4s). Fora do
+// bundle inicial, cabecalho, filtros, KPIs e tabelas pintam primeiro; os
+// graficos entram logo depois, cada um atras de um Suspense com placeholder
+// de mesma altura para nao gerar layout shift.
+const TimeSeriesChart = lazy(() => import('./components/TimeSeriesChart'))
+const CategoryChart = lazy(() => import('./components/CategoryChart'))
+const ForecastChart = lazy(() => import('./components/ForecastChart'))
+const LollipopChart = lazy(() => import('./components/LollipopChart'))
+const RidgelineChart = lazy(() => import('./components/RidgelineChart'))
+const CircularBarChart = lazy(() => import('./components/CircularBarChart'))
 
 function App() {
   const {
@@ -218,14 +226,16 @@ function App() {
             </div>
           </div>
 
-          <TimeSeriesChart
-            data={filteredTimeSeries}
-            title="Evolução histórica"
-            description="Preços ao longo do tempo no recorte selecionado."
-            height={350}
-            showMinMax
-            yAxisLabel="Preço (R$)"
-          />
+          <Suspense fallback={<ChartFallback height={350} />}>
+            <TimeSeriesChart
+              data={filteredTimeSeries}
+              title="Evolução histórica"
+              description="Preços ao longo do tempo no recorte selecionado."
+              height={350}
+              showMinMax
+              yAxisLabel="Preço (R$)"
+            />
+          </Suspense>
 
           <SeasonalHeatmap
             data={filteredData}
@@ -235,16 +245,20 @@ function App() {
 
           {/* Advanced D3 Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <CircularBarChart
-              data={filteredTimeSeries}
-              title="Padrão Sazonal (Radial)"
-              width={380}
-              height={380}
-            />
-            <RidgelineChart
-              data={filteredTimeSeries}
-              title="Distribuição de Preços por Ano"
-            />
+            <Suspense fallback={<ChartFallback height={380} />}>
+              <CircularBarChart
+                data={filteredTimeSeries}
+                title="Padrão Sazonal (Radial)"
+                width={380}
+                height={380}
+              />
+            </Suspense>
+            <Suspense fallback={<ChartFallback height={380} />}>
+              <RidgelineChart
+                data={filteredTimeSeries}
+                title="Distribuição de Preços por Ano"
+              />
+            </Suspense>
           </div>
         </section>
 
@@ -261,22 +275,26 @@ function App() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <CategoryChart
-              data={aggregations?.byCategory}
-              title="Preço médio por categoria"
-              description="Comparação entre categorias."
-              xAxisLabel="Preço médio (R$)"
-              onCategoriaClick={handleCategoriaClick}
-              selectedCategoria={filters.categoria}
-            />
-            <CategoryChart
-              data={aggregations?.byCategory}
-              title="Distribuição de registros"
-              description="Participação por categoria."
-              showPie
-              onCategoriaClick={handleCategoriaClick}
-              selectedCategoria={filters.categoria}
-            />
+            <Suspense fallback={<ChartFallback />}>
+              <CategoryChart
+                data={aggregations?.byCategory}
+                title="Preço médio por categoria"
+                description="Comparação entre categorias."
+                xAxisLabel="Preço médio (R$)"
+                onCategoriaClick={handleCategoriaClick}
+                selectedCategoria={filters.categoria}
+              />
+            </Suspense>
+            <Suspense fallback={<ChartFallback />}>
+              <CategoryChart
+                data={aggregations?.byCategory}
+                title="Distribuição de registros"
+                description="Participação por categoria."
+                showPie
+                onCategoriaClick={handleCategoriaClick}
+                selectedCategoria={filters.categoria}
+              />
+            </Suspense>
           </div>
 
           <div className="card p-6">
@@ -344,12 +362,14 @@ function App() {
           </div>
 
           {/* Lollipop Chart - Top Products by Price */}
-          <LollipopChart
-            data={aggregations?.topProducts}
-            title="Top 15 Produtos por Preço Médio"
-            width={700}
-            height={500}
-          />
+          <Suspense fallback={<ChartFallback height={500} />}>
+            <LollipopChart
+              data={aggregations?.topProducts}
+              title="Top 15 Produtos por Preço Médio"
+              width={700}
+              height={500}
+            />
+          </Suspense>
 
           <ProductTable
             data={aggregations?.topProducts}
@@ -452,12 +472,14 @@ function App() {
             </div>
           ) : forecastData ? (
             <>
-              <ForecastChart
-                historico={forecastData.historico}
-                modelos={forecastData.modelos}
-                title={`Previsão: ${forecastProductName || forecastSlug}`}
-                description="Histórico e previsões com intervalos de confiança de 95%."
-              />
+              <Suspense fallback={<ChartFallback height={400} />}>
+                <ForecastChart
+                  historico={forecastData.historico}
+                  modelos={forecastData.modelos}
+                  title={`Previsão: ${forecastProductName || forecastSlug}`}
+                  description="Histórico e previsões com intervalos de confiança de 95%."
+                />
+              </Suspense>
 
               <ForecastKpis
                 modelos={forecastData.modelos}
