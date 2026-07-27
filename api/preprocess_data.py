@@ -134,13 +134,24 @@ def load_data(regional: bool = False) -> pd.DataFrame:
 
 
 def generate_aggregated_data(df: pd.DataFrame) -> dict:
-    """Generate pre-aggregated statistics."""
+    """Gera estatisticas pre-agregadas.
+
+    Este arquivo passou a ser a fonte da visao padrao do dashboard (sem
+    filtro). Antes o front baixava detailed.json (4,5 MB) e recalculava tudo
+    no cliente; como detailed.json e uma AMOSTRA de 50 mil registros, os
+    numeros de destaque saiam da amostra e nao do conjunto completo. Aqui os
+    agregados vem do df inteiro, entao alem de muito menor tambem e correto.
+
+    Por isso incluimos minimo/maximo/registros/unidade e a sparkline mensal:
+    sao os campos que o dashboard antes derivava dos registros crus.
+    """
     agg = {
         'metadata': {
             'generated_at': datetime.now().isoformat(),
             'total_records': len(df),
             'year_min': int(df['ano'].min()),
             'year_max': int(df['ano'].max()),
+            'latest_date': _latest_date(df),
         },
         'by_year': {},
         'by_category': {},
@@ -154,19 +165,88 @@ def generate_aggregated_data(df: pd.DataFrame) -> dict:
         }
 
     for cat, grp in df.groupby('categoria'):
+        precos = grp['preco_medio'].dropna()
         agg['by_category'][cat] = {
-            'media': round(float(grp['preco_medio'].mean()), 2),
+            'media': round(float(precos.mean()), 2) if len(precos) else 0.0,
             'registros': len(grp),
+            'minimo': round(float(precos.min()), 2) if len(precos) else 0.0,
+            'maximo': round(float(precos.max()), 2) if len(precos) else 0.0,
+            'produtos': int(grp['produto'].nunique()),
         }
 
-    prod_agg = df.groupby('produto').agg({'preco_medio': 'mean', 'categoria': 'first'}).round(2)
-    for prod, row in prod_agg.head(100).iterrows():
+    for prod, grp in df.groupby('produto'):
+        precos = grp['preco_medio'].dropna()
+        if not len(precos):
+            continue
+
+        unidade = grp['unidade'].mode()
+        anos = sorted(grp['ano'].dropna().unique(), reverse=True)
+        variacao = None
+        if len(anos) >= 2:
+            atual = grp[grp['ano'] == anos[0]]['preco_medio'].mean()
+            anterior = grp[grp['ano'] == anos[1]]['preco_medio'].mean()
+            if pd.notna(atual) and pd.notna(anterior) and anterior > 0:
+                variacao = round(float((atual - anterior) / anterior * 100), 2)
+
         agg['by_product'][prod] = {
-            'media': float(row['preco_medio']),
-            'categoria': row['categoria'],
+            'media': round(float(precos.mean()), 2),
+            'categoria': grp['categoria'].iloc[0],
+            'registros': len(grp),
+            'unidade': unidade.iloc[0] if len(unidade) else None,
+            'minimo': round(float(precos.min()), 2),
+            'maximo': round(float(precos.max()), 2),
+            'variacao': variacao,
+            # Ultimos 12 meses, no mesmo formato que o front espera.
+            'sparkline': _monthly_sparkline(grp),
         }
 
     return agg
+
+
+def _latest_date(df: pd.DataFrame) -> str:
+    """Data mais recente presente no conjunto, como string ISO."""
+    datas = df['data'].dropna().astype(str)
+    return max(datas) if len(datas) else ''
+
+
+def _monthly_sparkline(grp: pd.DataFrame, months: int = 12) -> list:
+    """Media mensal dos ultimos `months` periodos de um produto."""
+    if 'periodo' not in grp.columns:
+        return []
+    serie = grp.dropna(subset=['preco_medio']).groupby('periodo')['preco_medio'].mean()
+    return [
+        {'period': str(period), 'value': round(float(value), 2)}
+        for period, value in serie.sort_index().tail(months).items()
+    ]
+
+
+def generate_latest_prices(df: pd.DataFrame) -> dict:
+    """Registros completos da data mais recente.
+
+    O painel "Ultimos Precos" derivava isso varrendo detailed.json inteiro.
+    Como aquele arquivo e uma amostra aleatoria, o painel podia omitir
+    produtos cotados no dia. Aqui usamos o df completo, entao o resultado e
+    exato e cabe em poucos KB.
+    """
+    latest = _latest_date(df)
+    if not latest:
+        return {'date': '', 'records': []}
+
+    day = df[df['data'].astype(str) == latest]
+    records = [
+        {
+            'd': str(row.get('data', '')),
+            'a': int(row['ano']) if pd.notna(row['ano']) else None,
+            'p': row.get('produto', ''),
+            'c': row.get('categoria', ''),
+            'u': row.get('unidade', ''),
+            'pm': round(float(row['preco_medio']), 2),
+        }
+        for _, row in day.iterrows()
+        if pd.notna(row.get('preco_medio'))
+    ]
+
+    return {'date': latest, 'records': records}
 
 
 def generate_time_series(df: pd.DataFrame) -> dict:
@@ -189,11 +269,19 @@ def generate_time_series(df: pd.DataFrame) -> dict:
 
 
 def generate_detailed_data(df: pd.DataFrame) -> dict:
-    """Generate detailed records."""
-    sample_df = df.sample(n=min(50000, len(df)), random_state=42) if len(df) > 50000 else df
+    """Registros detalhados, agora completos.
 
+    Antes isto era uma amostra aleatoria de 50 mil registros, porque o arquivo
+    era baixado no carregamento inicial e o tamanho pesava. O efeito colateral
+    era que todo numero do dashboard saia da amostra: filtrar por "Pecuaria"
+    mostrava ~13,5 mil cotacoes onde existem ~20,9 mil.
+
+    Como o dashboard passou a baixar este arquivo apenas sob demanda (quando o
+    usuario aplica um filtro), o limite deixou de fazer sentido. Sem amostra,
+    as visoes filtradas passam a bater com os agregados.
+    """
     records = []
-    for _, row in sample_df.iterrows():
+    for _, row in df.iterrows():
         records.append({
             'd': row.get('data', ''),
             'a': int(row['ano']) if pd.notna(row['ano']) else None,
@@ -568,6 +656,9 @@ def main():
     if not df_agg.empty:
         # Original JSON files (from aggregated data)
         save_json(generate_aggregated_data(df_agg), 'aggregated.json')
+        save_json(generate_latest_prices(df_agg), 'latest.json')
+        # detailed.json continua sendo gerado, mas o dashboard so o baixa sob
+        # demanda (ao aplicar filtro), nao mais no carregamento inicial.
         save_json(generate_detailed_data(df_agg), 'detailed.json')
         save_json(generate_time_series(df_agg), 'timeseries.json')
         save_json(generate_filter_maps(df_agg), 'filters.json')

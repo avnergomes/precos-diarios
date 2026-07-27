@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect, lazy, Suspense } from 'react'
-import { useData, useFilteredData, useAggregations, useFilteredTimeSeries } from './hooks/useData'
+import { useData, useFilteredData, useAggregations, useFilteredTimeSeries, hasActiveFilters } from './hooks/useData'
 import { useForecast, useForecastProducts } from './hooks/useForecast'
 import Header from './components/Header'
 import ApiModal from './components/ApiModal'
@@ -40,6 +40,8 @@ function App() {
     loadRegionalDetail,
     regionalDetailLoading,
     regionalDetailError,
+    loadDetail,
+    detailLoading,
   } = useData()
   const [filters, setFilters] = useState({
     anoMin: null,
@@ -53,6 +55,12 @@ function App() {
   useEffect(() => {
     if (filters.regional) loadRegionalDetail()
   }, [filters.regional, loadRegionalDetail])
+
+  // detailed.json (~4,5 MB) idem: só é necessário quando há filtro, porque a
+  // visão sem filtro é servida inteiramente pelos agregados.
+  useEffect(() => {
+    if (hasActiveFilters(filters)) loadDetail()
+  }, [filters, loadDetail])
 
   // API Modal state
   const [isApiModalOpen, setIsApiModalOpen] = useState(false)
@@ -69,7 +77,19 @@ function App() {
 
   const filteredData = useFilteredData(data, filters)
   const aggregations = useAggregations(filteredData, data)
-  const filteredTimeSeries = useFilteredTimeSeries(filteredData)
+  const filteredTimeSeries = useFilteredTimeSeries(filteredData, data)
+  // "Últimos Preços" vem de latest.json, que traz o dia completo. Antes saía de
+  // detailed.json, que é amostrado, e por isso omitia cotações do dia.
+  // Os filtros de categoria/produto continuam valendo aqui, como antes; são
+  // poucas dezenas de registros, então filtrar em memória é trivial.
+  const latestRecords = useMemo(() => {
+    const base = data?.latest?.records
+    if (!base?.length) return filteredData
+    return base.filter(r =>
+      (!filters.categoria || r.c === filters.categoria) &&
+      (!filters.produto || r.p === filters.produto)
+    )
+  }, [data?.latest, filteredData, filters.categoria, filters.produto])
   const metadata = data?.aggregated?.metadata
 
   // Click-to-filter handlers
@@ -194,8 +214,16 @@ function App() {
           </div>
         )}
 
-        {/* Global No Data Banner */}
-        {filteredData.length === 0 && (filters.produto || filters.categoria || filters.regional || filters.anoMin || filters.anoMax) && (
+        {/* Detalhamento sendo carregado sob demanda após o primeiro filtro */}
+        {detailLoading && (
+          <div className="bg-primary-50 border border-primary-200 rounded-lg p-4 text-primary-800 text-sm">
+            Carregando o detalhamento por registro para aplicar os filtros...
+          </div>
+        )}
+
+        {/* Global No Data Banner. Só faz sentido depois que o detalhamento
+            chegou; antes disso a lista vazia significa "ainda carregando". */}
+        {!detailLoading && data?.detailed && filteredData.length === 0 && hasActiveFilters(filters) && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-sm">
             <strong>Nenhum dado encontrado</strong> para a combinação de filtros selecionada.
             {filters.regional && (
@@ -211,7 +239,7 @@ function App() {
 
         {/* Latest Prices Section */}
         <section id="latest" className="space-y-6">
-          <LatestPrices records={filteredData} />
+          <LatestPrices records={latestRecords} />
         </section>
 
         {/* Evolution Section */}
@@ -327,10 +355,10 @@ function App() {
                           {formatCurrency(stats.media)}
                         </td>
                         <td className="px-4 py-3 text-right text-dark-500">
-                          {formatCurrency(stats.minimo)}
+                          {stats.minimo == null ? '—' : formatCurrency(stats.minimo)}
                         </td>
                         <td className="px-4 py-3 text-right text-dark-500">
-                          {formatCurrency(stats.maximo)}
+                          {stats.maximo == null ? '—' : formatCurrency(stats.maximo)}
                         </td>
                         <td className="px-4 py-3 text-right">
                           {stats.registros?.toLocaleString('pt-BR')}

@@ -9,6 +9,9 @@ export function useData() {
   const [regionalDetailLoading, setRegionalDetailLoading] = useState(false)
   const [regionalDetailError, setRegionalDetailError] = useState(false)
   const regionalRequestedRef = useRef(false)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState(false)
+  const detailRequestedRef = useRef(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -19,13 +22,17 @@ export function useData() {
         setLoading(true)
         setError(null)
 
-        // Load core data files (API-first, static fallback per file)
-        const [aggregated, detailed, timeseries, filters] = await Promise.all([
+        // Carga inicial: só arquivos agregados, ~50 KB no total.
+        // detailed.json (4,5 MB) saiu daqui e virou loadDetail(), sob demanda,
+        // porque travava o first paint e a interatividade sem necessidade: a
+        // visão sem filtro é inteiramente servida por aggregated/timeseries.
+        const [aggregated, latest, timeseries, filters] = await Promise.all([
           fetchData('aggregated.json', { signal }),
-          fetchData('detailed.json', { signal }),
+          fetchData('latest.json', { signal }).catch(() => null),
           fetchData('timeseries.json', { signal }),
           fetchData('filters.json', { signal }),
         ])
+        const detailed = null
 
         if (signal.aborted) return
 
@@ -48,6 +55,7 @@ export function useData() {
         if (!signal.aborted) {
           setData({
             aggregated,
+            latest,
             detailed,
             detailedRegional: null,
             timeseries,
@@ -70,6 +78,27 @@ export function useData() {
 
     loadData()
     return () => controller.abort()
+  }, [])
+
+  // Carrega detailed.json (~4,5 MB) só quando o usuário aplica um filtro, que
+  // é quando a granularidade por registro passa a ser necessária. Sem filtro,
+  // a tela inteira sai de aggregated.json + timeseries.json + latest.json.
+  const loadDetail = useCallback(() => {
+    if (detailRequestedRef.current) return
+    detailRequestedRef.current = true
+    setDetailLoading(true)
+    setDetailError(false)
+    fetchData('detailed.json')
+      .catch(() => null)
+      .then(detailed => {
+        if (detailed?.records?.length) {
+          setData(prev => (prev ? { ...prev, detailed } : prev))
+        } else {
+          detailRequestedRef.current = false
+          setDetailError(true)
+        }
+      })
+      .finally(() => setDetailLoading(false))
   }, [])
 
   // Carrega o detalhamento regional (~33 MB) só quando o usuário seleciona
@@ -103,7 +132,18 @@ export function useData() {
     loadRegionalDetail,
     regionalDetailLoading,
     regionalDetailError,
+    loadDetail,
+    detailLoading,
+    detailError,
   }
+}
+
+/** Há algum filtro ativo? Sem filtro, a visão sai só dos agregados. */
+export function hasActiveFilters(filters) {
+  return Boolean(
+    filters?.produto || filters?.categoria || filters?.regional ||
+    filters?.anoMin || filters?.anoMax
+  )
 }
 
 function normalizeFilters(filtersJson, aggregated, detailed, regionalFilters) {
@@ -202,8 +242,109 @@ export function useFilteredData(data, filters) {
   }, [data, filters])
 }
 
+/**
+ * Monta as mesmas estruturas de `useAggregations` a partir de aggregated.json,
+ * sem precisar dos registros crus. Usado na visão sem filtro.
+ *
+ * Além de dispensar o download de 4,5 MB, isto é mais correto do que o caminho
+ * antigo: detailed.json é uma amostra de 50 mil registros, então os números de
+ * destaque saíam da amostra. Aqui vêm do conjunto completo (77 mil).
+ */
+export function aggregationsFromSummary(aggregated) {
+  const byYear = aggregated?.by_year || {}
+  const byProductRaw = aggregated?.by_product || {}
+  const byCategoryRaw = aggregated?.by_category || {}
+
+  const years = Object.keys(byYear).map(Number).filter(n => !Number.isNaN(n)).sort((a, b) => b - a)
+
+  // Média ponderada por registros: a média das médias anuais seria enviesada.
+  let somaPonderada = 0
+  let totalRegistros = 0
+  Object.values(byYear).forEach(y => {
+    if (y?.media > 0 && y?.registros > 0) {
+      somaPonderada += y.media * y.registros
+      totalRegistros += y.registros
+    }
+  })
+
+  let yoyChange = 0
+  if (years.length >= 2) {
+    const atual = byYear[years[0]]?.media
+    const anterior = byYear[years[1]]?.media
+    if (atual > 0 && anterior > 0) yoyChange = ((atual - anterior) / anterior) * 100
+  }
+
+  const minimos = Object.values(byCategoryRaw).map(c => c.minimo).filter(v => v > 0)
+  const maximos = Object.values(byCategoryRaw).map(c => c.maximo).filter(v => v > 0)
+
+  // A API e o bundle estático podem servir versões diferentes de
+  // aggregated.json: minimo/maximo/produtos só existem no formato novo.
+  // Quando faltarem, derivamos de by_product; se nem lá houver, devolvemos
+  // null para a UI mostrar "—" em vez de um R$ 0,00 que seria falso.
+  const produtosPorCategoria = {}
+  const faixaPorCategoria = {}
+  Object.values(byProductRaw).forEach(p => {
+    const cat = p?.categoria
+    if (!cat) return
+    produtosPorCategoria[cat] = (produtosPorCategoria[cat] || 0) + 1
+    if (p.minimo > 0 || p.maximo > 0) {
+      const faixa = faixaPorCategoria[cat] || { min: Infinity, max: -Infinity }
+      if (p.minimo > 0) faixa.min = Math.min(faixa.min, p.minimo)
+      if (p.maximo > 0) faixa.max = Math.max(faixa.max, p.maximo)
+      faixaPorCategoria[cat] = faixa
+    }
+  })
+
+  const byCategory = {}
+  Object.entries(byCategoryRaw).forEach(([cat, c]) => {
+    const faixa = faixaPorCategoria[cat]
+    byCategory[cat] = {
+      media: c.media ?? 0,
+      minimo: c.minimo ?? (faixa && faixa.min !== Infinity ? faixa.min : null),
+      maximo: c.maximo ?? (faixa && faixa.max !== -Infinity ? faixa.max : null),
+      registros: c.registros ?? 0,
+      produtos: c.produtos ?? produtosPorCategoria[cat] ?? 0,
+    }
+  })
+
+  const sparklineData = {}
+  const topProducts = Object.entries(byProductRaw).map(([produto, p]) => {
+    sparklineData[produto] = p.sparkline || []
+    return {
+      produto,
+      categoria: p.categoria,
+      unidade: p.unidade ?? null,
+      media: p.media ?? 0,
+      registros: p.registros ?? 0,
+      variacao: p.variacao ?? null,
+    }
+  }).sort((a, b) => b.registros - a.registros)
+
+  return {
+    totalRecords: aggregated?.metadata?.total_records ?? totalRegistros,
+    avgPrice: totalRegistros > 0 ? somaPonderada / totalRegistros : 0,
+    minPrice: minimos.length ? Math.min(...minimos) : 0,
+    maxPrice: maximos.length ? Math.max(...maximos) : 0,
+    uniqueProducts: Object.keys(byProductRaw).length,
+    uniqueCategories: Object.keys(byCategoryRaw).length,
+    uniqueRegionais: 0,
+    yoyChange,
+    topProducts,
+    byCategory,
+    byRegional: {},
+    sparklineData,
+  }
+}
+
 export function useAggregations(filteredData, data) {
   return useMemo(() => {
+    // Sem registros carregados, serve a visão a partir dos agregados em vez de
+    // devolver zeros. Isto é o que permite a tela renderizar completa sem os
+    // 4,5 MB de detailed.json.
+    if ((!filteredData || filteredData.length === 0) && data?.aggregated && !data?.detailed) {
+      return aggregationsFromSummary(data.aggregated)
+    }
+
     if (!filteredData || filteredData.length === 0) {
       return {
         totalRecords: 0,
@@ -438,8 +579,26 @@ function getRecordMonth(record) {
 }
 
 // Generate time series from filtered data
-export function useFilteredTimeSeries(filteredData) {
+export function useFilteredTimeSeries(filteredData, data) {
   return useMemo(() => {
+    // Sem registros carregados, usa a série mensal já pré-agregada.
+    // timeseries.json não traz min/max por período, então caem para a própria
+    // média: o gráfico mostra a linha corretamente, sem a faixa min-max, que
+    // volta assim que o detalhamento é carregado por um filtro.
+    if ((!filteredData || filteredData.length === 0) && data?.timeseries?.by_period) {
+      const result = {}
+      Object.entries(data.timeseries.by_period).forEach(([period, stats]) => {
+        const media = stats?.media ?? 0
+        result[period] = {
+          media,
+          min: media,
+          max: media,
+          count: stats?.count ?? 0,
+        }
+      })
+      return result
+    }
+
     if (!filteredData || filteredData.length === 0) return {}
 
     const getPrice = (r) => r.pm ?? r.v
@@ -472,5 +631,5 @@ export function useFilteredTimeSeries(filteredData) {
     })
 
     return result
-  }, [filteredData])
+  }, [filteredData, data])
 }
