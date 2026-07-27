@@ -22,3 +22,8 @@ jobs:
             https://avnergomes.github.io/precos-diarios/
           budgetPath: .github/lighthouse-budget.json
           uploadArtifacts: true
+          # Runner compartilhado tem variacao alta: medicoes de FCP na mesma
+          # versao do site variaram 4391ms e 4682ms. Tres execucoes e mediana
+          # evitam reprovar por ruido de amostra unica. Isto corrige a medicao,
+          # nao afrouxa o budget, que segue em 4000ms/15000ms.
+          runs: 3
