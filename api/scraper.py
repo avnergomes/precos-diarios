@@ -38,6 +38,12 @@ COTACAO_URL = f"{BASE_URL}/Pagina/Cotacao-Diaria-SIMA-"
 # Scraper scan settings
 MAX_FORWARD_SCAN = 500
 MAX_CONSECUTIVE_FAILURES = 15
+
+# Falhas de transporte (timeout/conexao/5xx) sao repetidas antes de virarem
+# UpstreamUnavailable, para que uma oscilacao momentanea do SIMA nao derrube
+# a execucao inteira.
+MAX_NETWORK_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 3
 STATE_FILE = DATA_DIR / "scraper_state.json"
 
 # Headers to mimic browser
@@ -77,19 +83,57 @@ def save_scraper_state(state: dict):
         json.dump(state, f, indent=2)
 
 
+class UpstreamUnavailable(RuntimeError):
+    """O SIMA nao respondeu: timeout, erro de conexao ou HTTP 5xx.
+
+    Distinta de 404. Um 404 significa "boletim ainda nao publicado"; esta
+    excecao significa "nao foi possivel saber". Sem essa separacao, uma queda
+    do SIMA fica indistinguivel de um dia sem publicacao, e a execucao termina
+    verde sem ter ingerido nada.
+    """
+
+
 def fetch_page(url: str) -> Optional[str]:
-    """Fetch a webpage (single attempt, no retry on 404)."""
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=30)
-        if response.status_code == 404:
-            return None
-        response.raise_for_status()
-        return response.text
-    except requests.exceptions.HTTPError:
-        return None
-    except Exception as e:
-        logger.warning(f"Error fetching {url}: {e}")
-        return None
+    """Busca uma pagina, repetindo falhas de transporte.
+
+    Returns:
+        O corpo da pagina, ou None quando ela realmente nao existe (404).
+
+    Raises:
+        UpstreamUnavailable: apos MAX_NETWORK_RETRIES tentativas sem resposta
+            utilizavel (timeout, conexao recusada ou 5xx).
+    """
+    last_error = None
+
+    for attempt in range(1, MAX_NETWORK_RETRIES + 1):
+        try:
+            response = requests.get(url, headers=HEADERS, timeout=30)
+        except requests.exceptions.RequestException as e:
+            last_error = e
+        else:
+            if response.status_code == 404:
+                return None
+            if response.status_code < 500:
+                if response.status_code >= 400:
+                    # 4xx que nao 404: a pagina nao serve, mas o servidor esta
+                    # de pe. Nao e indisponibilidade.
+                    logger.warning(
+                        f"  {url}: HTTP {response.status_code}, tratando como inexistente"
+                    )
+                    return None
+                return response.text
+            last_error = f"HTTP {response.status_code}"
+
+        if attempt < MAX_NETWORK_RETRIES:
+            logger.warning(
+                f"  {url}: tentativa {attempt}/{MAX_NETWORK_RETRIES} falhou "
+                f"({last_error}), repetindo"
+            )
+            time.sleep(RETRY_BACKOFF_SECONDS * attempt)
+
+    raise UpstreamUnavailable(
+        f"{url} sem resposta apos {MAX_NETWORK_RETRIES} tentativas: {last_error}"
+    )
 
 
 def parse_date_from_filename(filename: str) -> Optional[datetime]:
@@ -245,6 +289,16 @@ def scrape_cotacao(cotacao_id: int) -> Tuple[Optional[datetime], int]:
         if path:
             downloaded += 1
 
+    # A pagina anuncia planilhas mas nenhuma baixou. Isso e falha de rede, nao
+    # ausencia de dado. Sinalizar e obrigatorio: se retornassemos (date, 0), o
+    # chamador contaria a pagina como "encontrada", avancaria last_found_id e
+    # este dia nunca mais seria varrido.
+    if excel_links and downloaded == 0:
+        raise UpstreamUnavailable(
+            f"pagina {cotacao_id} lista {len(excel_links)} planilha(s) mas "
+            f"nenhuma foi baixada"
+        )
+
     return date, downloaded
 
 
@@ -276,7 +330,20 @@ def scrape_latest_quotations(days_back: int = 7, backfill: bool = False):
 
     for offset in range(0, max_scan):
         cotacao_id = start_id + offset
-        date, files_downloaded = scrape_cotacao(cotacao_id)
+        try:
+            date, files_downloaded = scrape_cotacao(cotacao_id)
+        except UpstreamUnavailable as e:
+            # Nao da para distinguir "sem boletim" de "SIMA fora" a partir daqui,
+            # entao paramos no ultimo ID confirmado e falhamos alto. Persistimos
+            # o progresso ja obtido para que a proxima execucao nao o refaca.
+            logger.error(f"SIMA indisponivel no ID {cotacao_id}: {e}")
+            state["last_found_id"] = highest_found
+            state["last_run"] = datetime.now().isoformat()
+            state["last_error"] = f"UpstreamUnavailable no ID {cotacao_id}: {e}"
+            save_scraper_state(state)
+            if new_links:
+                update_links_file(new_links)
+            raise
 
         if files_downloaded > 0:
             new_links.append(f"{COTACAO_URL}{cotacao_id}")
@@ -300,6 +367,7 @@ def scrape_latest_quotations(days_back: int = 7, backfill: bool = False):
     # Update state
     state["last_found_id"] = highest_found
     state["last_run"] = datetime.now().isoformat()
+    state.pop("last_error", None)  # varredura completou: limpa erro anterior
     save_scraper_state(state)
 
     # Update links file

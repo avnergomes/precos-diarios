@@ -14,9 +14,15 @@ build/
 .vite/
 
 # Environment
+# Nota: data-pipeline.yml faz "git add -A", que estagia arquivos nao
+# rastreados. Estes padroes precisam cobrir toda variante de env, nao so as
+# usadas hoje. ".env" sozinho nao cobre ".env.production".
 .env
+.env.*
 .env.local
 .env.*.local
+!.env.example
+!.env.*.example
 
 # Python
 __pycache__/

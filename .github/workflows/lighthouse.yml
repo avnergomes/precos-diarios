@@ -5,11 +5,15 @@ on:
     - cron: '0 10 * * 1'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   lighthouse:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Run Lighthouse
         uses: treosh/lighthouse-ci-action@v12

@@ -9,13 +9,20 @@ permissions:
   contents: write
   actions: write  # required by createWorkflowDispatch (deploy.yml trigger)
 
+# Serializa com o data-pipeline: ambos rodam generate_forecasts.py e dao push
+# na main. Sem isso, execucoes sobrepostas colidem no push.
+concurrency:
+  group: "data-pipeline"
+  cancel-in-progress: false
+
 jobs:
   forecast:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -42,7 +49,7 @@ jobs:
 
       - name: Trigger deploy workflow
         if: steps.commit.outputs.changed == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             // Retry: concurrent dispatches from data-pipeline.yml can transiently 409/500.
