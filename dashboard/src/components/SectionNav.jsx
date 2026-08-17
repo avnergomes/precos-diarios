@@ -94,14 +94,14 @@ export default function SectionNav() {
                 role="tab"
                 aria-selected={isActive}
                 onClick={() => scrollToSection(id)}
-                className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+                className={`flex items-center gap-2 px-3 py-2 min-h-[44px] text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
                   isActive
                     ? 'text-primary-700 bg-primary-50 ring-1 ring-primary-200'
                     : 'text-dark-600 hover:text-primary-600 hover:bg-primary-50'
                 }`}
               >
                 <Icon className="w-4 h-4" />
-                <span className="hidden sm:inline">{label}</span>
+                <span>{label}</span>
               </button>
             )
           })}

@@ -318,6 +318,22 @@ a:focus-visible {
   * { scroll-behavior: auto !important; }
 }
 
+/* Mobile — alvos de toque e font-size dos inputs
+   ≥44px evita toques acidentais (WCAG 2.5.5).
+   font-size ≥16px em inputs/selects evita auto-zoom do iOS Safari. */
+@media (max-width: 640px) {
+  .filter-select {
+    font-size: 1rem;    /* 16px — evita auto-zoom iOS */
+    min-height: 44px;
+  }
+  input[type="text"],
+  input[type="email"],
+  textarea,
+  select {
+    font-size: 1rem;    /* 16px — evita auto-zoom iOS */
+  }
+}
+
 /* High-contrast hover state on interactive table rows. */
 tr[role='button']:hover,
 tr.cursor-pointer:hover {
@@ -342,4 +358,17 @@ a:not(.no-underline):not(.tab-button):not([class*='button']):hover {
   margin-right: 0.4rem;
   vertical-align: middle;
   border: 1px solid rgba(20, 17, 12, 0.45);
+}
+
+/* Mobile: garante font-size ≥16px em inputs/selects para evitar
+   o auto-zoom do iOS Safari ao focar o elemento. */
+@media (max-width: 640px) {
+  .filter-select,
+  select,
+  input[type="text"],
+  input[type="email"],
+  input[type="search"],
+  textarea {
+    font-size: 16px !important;
+  }
 }
