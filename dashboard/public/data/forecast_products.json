@@ -1,5 +1,5 @@
 {
-  "gerado_em": "2026-08-26T16:47:55.805776",
+  "gerado_em": "2026-08-28T00:47:21.104392",
   "total": 16,
   "produtos": [
     {
@@ -7,8 +7,6 @@
       "slug": "algodao-em-caroco",
       "modelos": [
         "linear",
-        "arima",
-        "auto_arima",
         "random_forest",
         "xgboost"
       ]
@@ -18,8 +16,6 @@
       "slug": "arroz-em-casca-tipo-1",
       "modelos": [
         "linear",
-        "arima",
-        "auto_arima",
         "random_forest",
         "xgboost"
       ]
@@ -29,8 +25,6 @@
       "slug": "boi-em-pe",
       "modelos": [
         "linear",
-        "arima",
-        "auto_arima",
         "random_forest",
         "xgboost"
       ]
@@ -40,8 +34,6 @@
       "slug": "cafe-beneficiado",
       "modelos": [
         "linear",
-        "arima",
-        "auto_arima",
         "random_forest",
         "xgboost"
       ]
@@ -51,8 +43,6 @@
       "slug": "cafe-em-coco",
       "modelos": [
         "linear",
-        "arima",
-        "auto_arima",
         "random_forest",
         "xgboost"
       ]
@@ -62,8 +52,6 @@
       "slug": "erva-mate-folha-em-barranco",
       "modelos": [
         "linear",
-        "arima",
-        "auto_arima",
         "random_forest",
         "xgboost"
       ]
@@ -73,8 +61,6 @@
       "slug": "feijao-carioca-tipo-1",
       "modelos": [
         "linear",
-        "arima",
-        "auto_arima",
         "random_forest",
         "xgboost"
       ]
@@ -84,8 +70,6 @@
       "slug": "feijao-de-cor-tipo-1",
       "modelos": [
         "linear",
-        "arima",
-        "auto_arima",
         "random_forest",
         "xgboost"
       ]
@@ -95,8 +79,6 @@
       "slug": "feijao-preto-tipo-1",
       "modelos": [
         "linear",
-        "arima",
-        "auto_arima",
         "random_forest",
         "xgboost"
       ]
@@ -106,8 +88,6 @@
       "slug": "frango-de-corte",
       "modelos": [
         "linear",
-        "arima",
-        "auto_arima",
         "random_forest",
         "xgboost"
       ]
@@ -128,8 +108,6 @@
       "slug": "milho-amarelo-tipo-1",
       "modelos": [
         "linear",
-        "arima",
-        "auto_arima",
         "random_forest",
         "xgboost"
       ]
@@ -139,8 +117,6 @@
       "slug": "soja-industrial-tipo-1",
       "modelos": [
         "linear",
-        "arima",
-        "auto_arima",
         "random_forest",
         "xgboost"
       ]
@@ -150,8 +126,6 @@
       "slug": "suino-vivo",
       "modelos": [
         "linear",
-        "arima",
-        "auto_arima",
         "random_forest",
         "xgboost"
       ]
@@ -161,8 +135,6 @@
       "slug": "trigo-pao",
       "modelos": [
         "linear",
-        "arima",
-        "auto_arima",
         "random_forest",
         "xgboost"
       ]
@@ -172,8 +144,6 @@
       "slug": "vaca-em-pe",
       "modelos": [
         "linear",
-        "arima",
-        "auto_arima",
         "random_forest",
         "xgboost"
       ]
