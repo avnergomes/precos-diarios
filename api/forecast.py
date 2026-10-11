@@ -4,18 +4,22 @@
 Price Forecasting Module
 Implements ARIMA and Prophet models for agricultural price prediction.
 With fallback to simple linear regression when ML models fail.
+
+Shared utilities (RECENCY_MONTHS, calc_metrics, sanitize_for_json) are imported
+by scripts/generate_forecasts.py to avoid metric-logic duplication.
 """
 
 import logging
+import math
+import os
 import warnings
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 
-# Suppress warnings for cleaner output
 warnings.filterwarnings('ignore')
 
 logger = logging.getLogger(__name__)
@@ -28,7 +32,9 @@ except ImportError:
     HAS_PROPHET = False
     logger.info("Prophet not installed - using ARIMA and Linear models only")
 
+# ---------------------------------------------------------------------------
 # Configuration
+# ---------------------------------------------------------------------------
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
 PROCESSED_DIR = DATA_DIR / "processed"
@@ -36,6 +42,74 @@ PROCESSED_DIR = DATA_DIR / "processed"
 # Minimum months required for forecasting
 MIN_MONTHS_REQUIRED = 6
 
+# Products with last data point older than this many months are excluded.
+RECENCY_MONTHS = 3
+
+# ---------------------------------------------------------------------------
+# Shared utilities (also imported by generate_forecasts.py)
+# ---------------------------------------------------------------------------
+
+def calc_metrics(actual: np.ndarray, predicted: np.ndarray) -> Dict:
+    """MAE, RMSE, MAPE, R² — all out-of-sample safe; zero-division guarded."""
+    actual = np.asarray(actual, dtype=float)
+    predicted = np.asarray(predicted, dtype=float)
+    mask = actual != 0
+    mae = float(np.mean(np.abs(actual - predicted)))
+    rmse = float(np.sqrt(np.mean((actual - predicted) ** 2)))
+    mape = (
+        float(np.mean(np.abs((actual[mask] - predicted[mask]) / actual[mask])) * 100)
+        if mask.any()
+        else None
+    )
+    ss_res = float(np.sum((actual - predicted) ** 2))
+    ss_tot = float(np.sum((actual - np.mean(actual)) ** 2))
+    r2 = float(1 - ss_res / ss_tot) if ss_tot > 0 else None
+    return {
+        "mae": round(mae, 2),
+        "rmse": round(rmse, 2),
+        "mape": round(mape, 2) if mape is not None else None,
+        "r2": round(r2, 4) if r2 is not None else None,
+    }
+
+
+def sanitize_for_json(obj):
+    """Recursively replace NaN/Infinity with None so json.dumps never raises."""
+    if isinstance(obj, dict):
+        return {k: sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [sanitize_for_json(v) for v in obj]
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    return obj
+
+
+# ---------------------------------------------------------------------------
+# CSV cache (avoid re-reading on every API request)
+# ---------------------------------------------------------------------------
+_csv_cache: Dict = {"mtime": None, "df": None}
+
+
+def _load_csv_cached(csv_path: Path) -> Optional[pd.DataFrame]:
+    """Return the consolidated CSV, re-reading only when the file changes."""
+    try:
+        mtime = csv_path.stat().st_mtime
+    except OSError:
+        return None
+    if _csv_cache["mtime"] != mtime or _csv_cache["df"] is None:
+        df = pd.read_csv(csv_path, encoding='utf-8-sig')
+        df['data'] = pd.to_datetime(df['data'], errors='coerce')
+        df = df.dropna(subset=['data'])
+        # Defensive dedup by (data, produto, unidade)
+        dedup_cols = [c for c in ['data', 'produto', 'unidade'] if c in df.columns]
+        if dedup_cols:
+            df = df.groupby(dedup_cols, as_index=False)['preco_medio'].mean()
+        _csv_cache.update({"mtime": mtime, "df": df})
+    return _csv_cache["df"]
+
+
+# ---------------------------------------------------------------------------
+# PriceForecaster class (API endpoint use)
+# ---------------------------------------------------------------------------
 
 class PriceForecaster:
     """
@@ -54,36 +128,26 @@ class PriceForecaster:
         """Load and prepare data for the specified product."""
         try:
             csv_path = PROCESSED_DIR / "consolidated.csv"
-            if not csv_path.exists():
+            df = _load_csv_cached(csv_path)
+            if df is None:
                 logger.error(f"Data file not found: {csv_path}")
                 return False
 
-            # Read with proper encoding
-            df = pd.read_csv(csv_path, encoding='utf-8-sig')
-
-            # Filter for product (handle encoding variations)
             product_data = df[df['produto'] == self.product].copy()
 
             if product_data.empty:
-                # Try matching without encoding issues
                 for prod in df['produto'].unique():
                     if self.product.lower() in prod.lower() or prod.lower() in self.product.lower():
                         product_data = df[df['produto'] == prod].copy()
-                        self.product = prod  # Update to matched name
+                        self.product = prod
                         break
 
             if product_data.empty:
                 logger.warning(f"No data found for product: {self.product}")
                 return False
 
-            # Convert date and sort
-            product_data['data'] = pd.to_datetime(product_data['data'], errors='coerce')
-            product_data = product_data.dropna(subset=['data'])
             product_data = product_data.sort_values('data')
-
             self.data = product_data
-
-            # Aggregate to monthly data (required for forecasting)
             self.monthly_data = self._aggregate_monthly(product_data)
 
             logger.info(f"Loaded {len(self.monthly_data)} months of data for {self.product}")
@@ -94,18 +158,17 @@ class PriceForecaster:
             return False
 
     def _aggregate_monthly(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Aggregate daily data to monthly averages."""
+        """Aggregate daily data to monthly averages, drop current partial month."""
         df = df.copy()
         df['year_month'] = df['data'].dt.to_period('M')
+        # Drop current partial month
+        current_period = pd.Timestamp.now().to_period('M')
+        df = df[df['year_month'] < current_period]
 
-        monthly = df.groupby('year_month').agg({
-            'preco_medio': 'mean',
-        }).reset_index()
-
+        monthly = df.groupby('year_month').agg({'preco_medio': 'mean'}).reset_index()
         monthly['ds'] = monthly['year_month'].dt.to_timestamp()
         monthly['y'] = monthly['preco_medio']
-
-        return monthly.sort_values('ds')
+        return monthly.sort_values('ds').reset_index(drop=True)
 
     def has_sufficient_data(self) -> bool:
         """Check if there's enough data for forecasting."""
@@ -114,10 +177,7 @@ class PriceForecaster:
         return len(self.monthly_data) >= MIN_MONTHS_REQUIRED
 
     def fit_arima(self) -> Dict:
-        """
-        Fit ARIMA model to the data.
-        Uses auto-selection of parameters (p, d, q).
-        """
+        """Fit ARIMA model to the data (auto p,d,q)."""
         try:
             from statsmodels.tsa.arima.model import ARIMA
             from statsmodels.tsa.stattools import adfuller
@@ -125,17 +185,13 @@ class PriceForecaster:
             if not self.has_sufficient_data():
                 return {'success': False, 'error': f'Dados insuficientes (mínimo {MIN_MONTHS_REQUIRED} meses)'}
 
-            # Keep pandas index so statsmodels returns Series/DataFrame outputs
             series = self.monthly_data.set_index('ds')['y']
 
-            # Test for stationarity
             try:
-                adf_result = adfuller(series, autolag='AIC')
-                d = 0 if adf_result[1] < 0.05 else 1
+                d = 0 if adfuller(series, autolag='AIC')[1] < 0.05 else 1
             except Exception:
                 d = 1
 
-            # Simple parameter selection
             best_aic = float('inf')
             best_order = (1, d, 1)
 
@@ -150,7 +206,6 @@ class PriceForecaster:
                     except Exception:
                         continue
 
-            # Fit final model
             self.arima_model = ARIMA(series, order=best_order).fit()
 
             return {
@@ -167,19 +222,17 @@ class PriceForecaster:
             return {'success': False, 'error': str(e)}
 
     def fit_prophet(self) -> Dict:
-        """
-        Fit Facebook Prophet model to the data.
-        """
+        """Fit Facebook Prophet model. No-op if Prophet is not installed."""
+        if not HAS_PROPHET:
+            return {'success': False, 'error': 'Prophet não instalado'}
         try:
             from prophet import Prophet
 
             if not self.has_sufficient_data():
                 return {'success': False, 'error': f'Dados insuficientes (mínimo {MIN_MONTHS_REQUIRED} meses)'}
 
-            # Prepare data for Prophet
             prophet_df = self.monthly_data[['ds', 'y']].copy()
 
-            # Fit model with suppressed logging
             import logging as lg
             lg.getLogger('prophet').setLevel(lg.WARNING)
             lg.getLogger('cmdstanpy').setLevel(lg.WARNING)
@@ -194,45 +247,34 @@ class PriceForecaster:
 
             return {'success': True}
 
-        except ImportError:
-            logger.error("prophet not installed")
-            return {'success': False, 'error': 'Prophet não instalado'}
         except Exception as e:
             logger.error(f"Prophet fitting error: {e}")
             return {'success': False, 'error': str(e)}
 
     def fit_linear(self) -> Dict:
-        """
-        Fit simple linear regression as fallback model.
-        """
+        """Fit simple linear regression as fallback model."""
         try:
             if not self.has_sufficient_data():
                 return {'success': False, 'error': f'Dados insuficientes (mínimo {MIN_MONTHS_REQUIRED} meses)'}
 
-            # Simple linear regression using numpy
             y = self.monthly_data['y'].values
             x = np.arange(len(y))
-
-            # Calculate slope and intercept
             n = len(x)
-            sum_x = np.sum(x)
-            sum_y = np.sum(y)
-            sum_xy = np.sum(x * y)
-            sum_x2 = np.sum(x ** 2)
+            slope = (n * np.sum(x * y) - np.sum(x) * np.sum(y)) / (n * np.sum(x ** 2) - np.sum(x) ** 2)
+            intercept = (np.sum(y) - slope * np.sum(x)) / n
 
-            self.linear_slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x ** 2)
-            self.linear_intercept = (sum_y - self.linear_slope * sum_x) / n
+            self.linear_slope = slope
+            self.linear_intercept = intercept
 
-            # Calculate R²
-            y_pred = self.linear_intercept + self.linear_slope * x
+            y_pred = intercept + slope * x
             ss_res = np.sum((y - y_pred) ** 2)
             ss_tot = np.sum((y - np.mean(y)) ** 2)
-            r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
+            r_squared = float(1 - ss_res / ss_tot) if ss_tot > 0 else 0.0
 
             return {
                 'success': True,
-                'slope': self.linear_slope,
-                'intercept': self.linear_intercept,
+                'slope': float(slope),
+                'intercept': float(intercept),
                 'r_squared': r_squared,
             }
 
@@ -246,15 +288,11 @@ class PriceForecaster:
             if self.arima_model is None:
                 return {'success': False, 'error': 'Modelo ARIMA não ajustado'}
 
-            # Convert days to months
             months = max(1, horizon // 30)
-
-            # Forecast
             forecast = self.arima_model.get_forecast(steps=months)
             pred_mean = np.asarray(forecast.predicted_mean)
             conf_int = np.asarray(forecast.conf_int(alpha=0.05))
 
-            # Generate dates
             last_date = self.monthly_data['ds'].iloc[-1]
             dates = pd.date_range(
                 start=last_date + pd.DateOffset(months=1),
@@ -271,7 +309,6 @@ class PriceForecaster:
                     'ic_superior': round(float(conf_int[i, 1]), 2),
                 })
 
-            # Calculate metrics
             metrics = self._calculate_metrics_arima()
 
             return {
@@ -290,14 +327,10 @@ class PriceForecaster:
             if self.prophet_model is None:
                 return {'success': False, 'error': 'Modelo Prophet não ajustado'}
 
-            # Convert days to months
             months = max(1, horizon // 30)
-
-            # Create future dataframe
             future = self.prophet_model.make_future_dataframe(periods=months, freq='MS')
             forecast = self.prophet_model.predict(future)
 
-            # Get only future predictions
             last_date = self.monthly_data['ds'].iloc[-1]
             future_forecast = forecast[forecast['ds'] > last_date]
 
@@ -310,7 +343,6 @@ class PriceForecaster:
                     'ic_superior': round(float(row['yhat_upper']), 2),
                 })
 
-            # Calculate metrics
             metrics = self._calculate_metrics_prophet()
 
             return {
@@ -329,11 +361,9 @@ class PriceForecaster:
             if not hasattr(self, 'linear_slope'):
                 return {'success': False, 'error': 'Modelo linear não ajustado'}
 
-            # Convert days to months
             months = max(1, horizon // 30)
             n = len(self.monthly_data)
 
-            # Generate dates
             last_date = self.monthly_data['ds'].iloc[-1]
             dates = pd.date_range(
                 start=last_date + pd.DateOffset(months=1),
@@ -341,12 +371,11 @@ class PriceForecaster:
                 freq='MS'
             )
 
-            # Calculate standard error for confidence interval
             y = self.monthly_data['y'].values
             x = np.arange(len(y))
             y_pred = self.linear_intercept + self.linear_slope * x
             mse = np.mean((y - y_pred) ** 2)
-            std_error = np.sqrt(mse) * 1.96  # 95% CI
+            std_error = np.sqrt(mse) * 1.96
 
             predictions = []
             for i, date in enumerate(dates):
@@ -359,19 +388,12 @@ class PriceForecaster:
                     'ic_superior': round(float(pred + std_error), 2),
                 })
 
-            # Calculate metrics
-            mae = np.mean(np.abs(y - y_pred))
-            rmse = np.sqrt(mse)
-            mape = np.mean(np.abs((y - y_pred) / y)) * 100
+            metrics = calc_metrics(y, y_pred)
 
             return {
                 'success': True,
                 'previsoes': predictions,
-                'metricas': {
-                    'mae': round(mae, 2),
-                    'rmse': round(rmse, 2),
-                    'mape': round(mape, 2),
-                },
+                'metricas': metrics,
             }
 
         except Exception as e:
@@ -379,43 +401,24 @@ class PriceForecaster:
             return {'success': False, 'error': str(e)}
 
     def _calculate_metrics_arima(self) -> Dict:
-        """Calculate ARIMA model metrics using in-sample predictions."""
+        """ARIMA in-sample metrics (used by API endpoint only)."""
         try:
-            fitted_values = self.arima_model.fittedvalues
+            fitted_values = np.asarray(self.arima_model.fittedvalues)
             actual = self.monthly_data['y'].values[-len(fitted_values):]
-
-            mae = np.mean(np.abs(actual - fitted_values))
-            rmse = np.sqrt(np.mean((actual - fitted_values) ** 2))
-            mape = np.mean(np.abs((actual - fitted_values) / actual)) * 100
-
-            return {
-                'mae': round(mae, 2),
-                'rmse': round(rmse, 2),
-                'mape': round(mape, 2),
-            }
+            return calc_metrics(actual, fitted_values)
         except Exception:
-            return {'mae': None, 'rmse': None, 'mape': None}
+            return {'mae': None, 'rmse': None, 'mape': None, 'r2': None}
 
     def _calculate_metrics_prophet(self) -> Dict:
-        """Calculate Prophet model metrics using in-sample predictions."""
+        """Prophet in-sample metrics (used by API endpoint only)."""
         try:
             df = self.monthly_data[['ds', 'y']].copy()
             forecast = self.prophet_model.predict(df)
-
             actual = df['y'].values
             predicted = forecast['yhat'].values
-
-            mae = np.mean(np.abs(actual - predicted))
-            rmse = np.sqrt(np.mean((actual - predicted) ** 2))
-            mape = np.mean(np.abs((actual - predicted) / actual)) * 100
-
-            return {
-                'mae': round(mae, 2),
-                'rmse': round(rmse, 2),
-                'mape': round(mape, 2),
-            }
+            return calc_metrics(actual, predicted)
         except Exception:
-            return {'mae': None, 'rmse': None, 'mape': None}
+            return {'mae': None, 'rmse': None, 'mape': None, 'r2': None}
 
     def get_historical_data(self, months: int = 24) -> List[Dict]:
         """Get historical monthly data for charting."""
@@ -436,15 +439,11 @@ def get_available_products() -> List[str]:
     """Get list of products available for forecasting (with sufficient data)."""
     try:
         csv_path = PROCESSED_DIR / "consolidated.csv"
-        if not csv_path.exists():
+        df = _load_csv_cached(csv_path)
+        if df is None:
             return []
 
-        df = pd.read_csv(csv_path, encoding='utf-8-sig')
-        df['data'] = pd.to_datetime(df['data'], errors='coerce')
-        df = df.dropna(subset=['data'])
         df['year_month'] = df['data'].dt.to_period('M')
-
-        # Only return products with sufficient data
         product_months = df.groupby('produto')['year_month'].nunique()
         valid_products = product_months[product_months >= MIN_MONTHS_REQUIRED].index.tolist()
 
@@ -485,14 +484,14 @@ def generate_forecast(product: str, horizon: int = 30) -> Dict:
     result = {
         'success': False,
         'produto': product,
-        'gerado_em': datetime.now().isoformat(),
+        'gerado_em': datetime.now(timezone.utc).isoformat(),
         'horizonte_dias': horizon,
         'meses_historico': len(forecaster.monthly_data),
         'historico': forecaster.get_historical_data(24),
         'modelos': {},
     }
 
-    # Always try linear regression as baseline
+    # Linear regression (always attempted)
     linear_fit = forecaster.fit_linear()
     if linear_fit.get('success'):
         linear_pred = forecaster.predict_linear(horizon)
@@ -504,7 +503,7 @@ def generate_forecast(product: str, horizon: int = 30) -> Dict:
                 'metricas': linear_pred['metricas'],
             }
 
-    # Try ARIMA
+    # ARIMA
     arima_fit = forecaster.fit_arima()
     if arima_fit.get('success'):
         arima_pred = forecaster.predict_arima(horizon)
@@ -516,7 +515,7 @@ def generate_forecast(product: str, horizon: int = 30) -> Dict:
                 'metricas': arima_pred['metricas'],
             }
 
-    # Try Prophet only if installed
+    # Prophet — optional, silent if not installed
     if HAS_PROPHET:
         prophet_fit = forecaster.fit_prophet()
         if prophet_fit.get('success'):
@@ -533,11 +532,10 @@ def generate_forecast(product: str, horizon: int = 30) -> Dict:
     if not result['success']:
         result['error'] = 'Nenhum modelo conseguiu gerar previsões'
 
-    return result
+    return sanitize_for_json(result)
 
 
 if __name__ == '__main__':
-    # Test forecasting
     logging.basicConfig(level=logging.INFO)
 
     products = get_available_products()

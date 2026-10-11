@@ -1,60 +1,69 @@
 {
-  "gerado_em": "2026-10-09T20:30:47.259695",
-  "total": 16,
+  "gerado_em": "2026-10-11T12:25:34.325152+00:00",
+  "total": 13,
   "produtos": [
-    {
-      "produto": "Algodão em caroço",
-      "slug": "algodao-em-caroco",
-      "modelos": [
-        "linear",
-        "random_forest",
-        "xgboost"
-      ]
-    },
     {
       "produto": "Arroz em casca tipo 1",
       "slug": "arroz-em-casca-tipo-1",
       "modelos": [
         "linear",
         "random_forest",
-        "xgboost"
-      ]
+        "xgboost",
+        "baseline_naive"
+      ],
+      "best_model": "xgboost"
     },
     {
       "produto": "Boi em pé",
       "slug": "boi-em-pe",
       "modelos": [
         "linear",
+        "arima",
+        "auto_arima",
         "random_forest",
-        "xgboost"
-      ]
+        "xgboost",
+        "baseline_naive"
+      ],
+      "best_model": "auto_arima"
     },
     {
-      "produto": "Café beneficiado",
-      "slug": "cafe-beneficiado",
+      "produto": "Café beneficiado bebida dura tipo 6",
+      "slug": "cafe-beneficiado-bebida-dura-tipo-6",
       "modelos": [
         "linear",
+        "arima",
+        "auto_arima",
         "random_forest",
-        "xgboost"
-      ]
+        "xgboost",
+        "baseline_naive"
+      ],
+      "best_model": "xgboost"
     },
     {
       "produto": "Café em coco",
       "slug": "cafe-em-coco",
       "modelos": [
         "linear",
+        "arima",
+        "auto_arima",
         "random_forest",
-        "xgboost"
-      ]
+        "xgboost",
+        "baseline_naive"
+      ],
+      "best_model": "arima"
     },
     {
       "produto": "Erva-mate folha em barranco",
       "slug": "erva-mate-folha-em-barranco",
       "modelos": [
         "linear",
+        "arima",
+        "auto_arima",
         "random_forest",
-        "xgboost"
-      ]
+        "xgboost",
+        "baseline_naive"
+      ],
+      "best_model": "arima"
     },
     {
       "produto": "Feijão carioca tipo 1",
@@ -62,35 +71,23 @@
       "modelos": [
         "linear",
         "random_forest",
-        "xgboost"
-      ]
-    },
-    {
-      "produto": "Feijão de cor tipo 1",
-      "slug": "feijao-de-cor-tipo-1",
-      "modelos": [
-        "linear",
-        "random_forest",
-        "xgboost"
-      ]
+        "xgboost",
+        "baseline_naive"
+      ],
+      "best_model": "linear"
     },
     {
       "produto": "Feijão preto tipo 1",
       "slug": "feijao-preto-tipo-1",
       "modelos": [
         "linear",
+        "arima",
+        "auto_arima",
         "random_forest",
-        "xgboost"
-      ]
-    },
-    {
-      "produto": "Frango de corte",
-      "slug": "frango-de-corte",
-      "modelos": [
-        "linear",
-        "random_forest",
-        "xgboost"
-      ]
+        "xgboost",
+        "baseline_naive"
+      ],
+      "best_model": "auto_arima"
     },
     {
       "produto": "Mandioca industrial",
@@ -100,53 +97,75 @@
         "arima",
         "auto_arima",
         "random_forest",
-        "xgboost"
-      ]
+        "xgboost",
+        "baseline_naive"
+      ],
+      "best_model": "arima"
     },
     {
       "produto": "Milho amarelo tipo 1",
       "slug": "milho-amarelo-tipo-1",
       "modelos": [
         "linear",
+        "arima",
+        "auto_arima",
         "random_forest",
-        "xgboost"
-      ]
+        "xgboost",
+        "baseline_naive"
+      ],
+      "best_model": "arima"
     },
     {
       "produto": "Soja industrial tipo 1",
       "slug": "soja-industrial-tipo-1",
       "modelos": [
         "linear",
+        "arima",
+        "auto_arima",
         "random_forest",
-        "xgboost"
-      ]
+        "xgboost",
+        "baseline_naive"
+      ],
+      "best_model": "auto_arima"
     },
     {
-      "produto": "Suíno vivo",
-      "slug": "suino-vivo",
+      "produto": "Suíno em pé tipo carne não integrado",
+      "slug": "suino-em-pe-tipo-carne-nao-integrado",
       "modelos": [
         "linear",
+        "arima",
+        "auto_arima",
         "random_forest",
-        "xgboost"
-      ]
+        "xgboost",
+        "baseline_naive"
+      ],
+      "best_model": "linear"
     },
     {
       "produto": "Trigo pão",
       "slug": "trigo-pao",
       "modelos": [
         "linear",
+        "arima",
+        "auto_arima",
         "random_forest",
-        "xgboost"
-      ]
+        "xgboost",
+        "baseline_naive"
+      ],
+      "best_model": "arima"
     },
     {
       "produto": "Vaca em pé",
       "slug": "vaca-em-pe",
       "modelos": [
         "linear",
+        "arima",
+        "auto_arima",
         "random_forest",
-        "xgboost"
-      ]
+        "xgboost",
+        "baseline_naive"
+      ],
+      "best_model": "auto_arima"
     }
   ]
 }

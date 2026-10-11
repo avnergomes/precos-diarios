@@ -4,19 +4,30 @@
 Pre-compute price forecasts for all eligible products.
 Generates static JSON files served by GitHub Pages — no API dependency.
 
-Models: Linear Regression, ARIMA, Auto ARIMA (SARIMA), Random Forest, XGBoost, Prophet (optional).
+Models: Linear Regression, ARIMA, Auto ARIMA (SARIMA), Random Forest, XGBoost,
+        Baseline Sazonal-Ingênuo, Prophet (optional).
+
+Metrics are out-of-sample (holdout last N_OOS months).
+IC for ML/linear models uses OOS residual std.
 """
 
 import json
 import logging
+import os
 import re
+import sys
 import warnings
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
+
+# Add project root to path so we can import from api.forecast
+_BASE_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_BASE_DIR))
+from api.forecast import calc_metrics, sanitize_for_json, RECENCY_MONTHS  # noqa: E402
 
 warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -25,15 +36,21 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = _BASE_DIR
 CSV_PATH = BASE_DIR / "data" / "processed" / "consolidated.csv"
-OUTPUT_DIR = BASE_DIR / "dashboard" / "public" / "data" / "forecasts"
-PRODUCTS_JSON = BASE_DIR / "dashboard" / "public" / "data" / "forecast_products.json"
 
-MIN_MONTHS = 24      # minimum for seasonal models (2 full annual cycles)
-HORIZON_MONTHS = 12  # pre-compute 12 months; frontend trims by user selection
+# Default output dirs; override via env vars for testing
+_DEFAULT_OUTPUT_DIR = BASE_DIR / "dashboard" / "public" / "data" / "forecasts"
+_DEFAULT_PRODUCTS_JSON = BASE_DIR / "dashboard" / "public" / "data" / "forecast_products.json"
+
+OUTPUT_DIR = Path(os.environ.get("FORECAST_OUTPUT_DIR", str(_DEFAULT_OUTPUT_DIR)))
+PRODUCTS_JSON = Path(os.environ.get("FORECAST_PRODUCTS_JSON", str(_DEFAULT_PRODUCTS_JSON)))
+
+MIN_MONTHS = 24       # minimum for seasonal models
+HORIZON_MONTHS = 12   # pre-compute 12 months
 HISTORY_MONTHS = 36
-CONFIDENCE = 0.05  # 95% CI
+N_OOS = 12            # out-of-sample holdout months for backtest
+CONFIDENCE = 0.05     # 95% CI
 
 # Optional heavy deps
 try:
@@ -68,47 +85,43 @@ def slugify(name: str) -> str:
     return s.strip("-")
 
 
-def calc_metrics(actual: np.ndarray, predicted: np.ndarray) -> Dict:
-    """MAE, RMSE, MAPE, R²."""
-    mask = actual != 0
-    mae = float(np.mean(np.abs(actual - predicted)))
-    rmse = float(np.sqrt(np.mean((actual - predicted) ** 2)))
-    mape = float(np.mean(np.abs((actual[mask] - predicted[mask]) / actual[mask])) * 100) if mask.any() else None
-    ss_res = np.sum((actual - predicted) ** 2)
-    ss_tot = np.sum((actual - np.mean(actual)) ** 2)
-    r2 = float(1 - ss_res / ss_tot) if ss_tot > 0 else None
-    return {
-        "mae": round(mae, 2),
-        "rmse": round(rmse, 2),
-        "mape": round(mape, 2) if mape is not None else None,
-        "r2": round(r2, 4) if r2 is not None else None,
-    }
-
-
 def build_lag_features(series: np.ndarray, months: np.ndarray, n_lags: int = 6):
     """Build feature matrix for ML models (RF, XGBoost)."""
     X, y = [], []
     for i in range(n_lags, len(series)):
-        row = list(series[i - n_lags : i])  # lag features
-        row.append(float(months[i]))        # month-of-year
-        row.append(float(i))                # trend index
+        row = list(series[i - n_lags: i]) + [float(months[i]), float(i)]
         X.append(row)
         y.append(series[i])
     return np.array(X), np.array(y)
 
 
-def future_features(series: np.ndarray, last_month: int, last_index: int, horizon: int, n_lags: int = 6):
-    """Iteratively build future feature rows for ML prediction."""
-    preds = []
-    buf = list(series[-n_lags:])
-    idx = last_index + 1
-    month = last_month
-    for _ in range(horizon):
-        month = (month % 12) + 1
-        row = list(buf[-n_lags:]) + [float(month), float(idx)]
-        preds.append(row)
-        idx += 1
-    return np.array(preds), preds  # return raw for iterative update
+# ---------------------------------------------------------------------------
+# Out-of-sample backtest helper
+# ---------------------------------------------------------------------------
+
+def _oos_holdout(monthly: pd.DataFrame, fit_fn, n_oos: int = N_OOS):
+    """
+    Hold out last n_oos months, refit on the remainder, return OOS metrics dict
+    (keys: mae, rmse, mape, r2, residual_std) or None if infeasible.
+    """
+    if len(monthly) < MIN_MONTHS + n_oos:
+        return None
+    train = monthly.iloc[:-n_oos].reset_index(drop=True)
+    test_actual = monthly.iloc[-n_oos:]["y"].values
+
+    result = fit_fn(train, n_oos)
+    if result is None:
+        return None
+
+    preds_raw = [p["previsto"] for p in result.get("previsoes", [])[:n_oos]]
+    if len(preds_raw) < len(test_actual):
+        return None
+
+    preds = np.array(preds_raw[: len(test_actual)], dtype=float)
+    residuals = test_actual - preds
+    m = calc_metrics(test_actual, preds)
+    m["residual_std"] = float(np.std(residuals))
+    return m
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +129,7 @@ def future_features(series: np.ndarray, last_month: int, last_index: int, horizo
 # ---------------------------------------------------------------------------
 
 def fit_linear(monthly: pd.DataFrame, horizon: int) -> Optional[Dict]:
-    """Simple linear regression."""
+    """Simple linear regression with OOS-based IC."""
     try:
         y = monthly["y"].values
         x = np.arange(len(y))
@@ -125,10 +138,8 @@ def fit_linear(monthly: pd.DataFrame, horizon: int) -> Optional[Dict]:
         intercept = (np.sum(y) - slope * np.sum(x)) / n
 
         y_pred = intercept + slope * x
-        metrics = calc_metrics(y, y_pred)
-
-        mse = np.mean((y - y_pred) ** 2)
-        std_err = np.sqrt(mse) * 1.96
+        # IC from training residuals (used only as fallback; caller replaces with OOS std)
+        std_err = float(np.std(y - y_pred)) * 1.96
 
         last_date = monthly["ds"].iloc[-1]
         dates = pd.date_range(start=last_date + pd.DateOffset(months=1), periods=horizon, freq="MS")
@@ -143,11 +154,16 @@ def fit_linear(monthly: pd.DataFrame, horizon: int) -> Optional[Dict]:
                 "ic_superior": round(float(p + std_err), 2),
             })
 
+        metrics_train = calc_metrics(y, y_pred)
+
         return {
             "nome": "Regressão Linear",
-            "r_squared": metrics["r2"],
+            "r_squared": metrics_train["r2"],
             "previsoes": preds,
-            "metricas": metrics,
+            "metricas": metrics_train,
+            "_slope": float(slope),
+            "_intercept": float(intercept),
+            "_n": n,
         }
     except Exception as e:
         logger.warning(f"  Linear failed: {e}")
@@ -182,27 +198,28 @@ def fit_arima(monthly: pd.DataFrame, horizon: int) -> Optional[Dict]:
         pred_mean = np.asarray(fc.predicted_mean)
         conf = np.asarray(fc.conf_int(alpha=CONFIDENCE))
 
-        fitted = model.fittedvalues
+        fitted = np.asarray(model.fittedvalues)
         actual = monthly["y"].values[-len(fitted):]
-        metrics = calc_metrics(actual, np.asarray(fitted))
+        metrics_train = calc_metrics(actual, fitted)
 
         last_date = monthly["ds"].iloc[-1]
         dates = pd.date_range(start=last_date + pd.DateOffset(months=1), periods=horizon, freq="MS")
 
-        preds = []
-        for i, d in enumerate(dates):
-            preds.append({
+        preds = [
+            {
                 "data": d.strftime("%Y-%m-%d"),
                 "previsto": round(float(pred_mean[i]), 2),
                 "ic_inferior": round(float(conf[i, 0]), 2),
                 "ic_superior": round(float(conf[i, 1]), 2),
-            })
+            }
+            for i, d in enumerate(dates)
+        ]
 
         return {
             "nome": "ARIMA",
             "ordem": list(best_order),
             "previsoes": preds,
-            "metricas": metrics,
+            "metricas": metrics_train,
         }
     except Exception as e:
         logger.warning(f"  ARIMA failed: {e}")
@@ -226,7 +243,6 @@ def fit_auto_arima(monthly: pd.DataFrame, horizon: int) -> Optional[Dict]:
         best_order = (1, d, 1)
         best_seasonal = (0, 0, 0, 12)
 
-        # Non-seasonal grid
         for p in range(3):
             for q in range(3):
                 try:
@@ -239,7 +255,6 @@ def fit_auto_arima(monthly: pd.DataFrame, horizon: int) -> Optional[Dict]:
                 except Exception:
                     continue
 
-        # Seasonal grid (lighter search)
         if len(series) >= 24:
             for P in range(2):
                 for Q in range(2):
@@ -261,28 +276,29 @@ def fit_auto_arima(monthly: pd.DataFrame, horizon: int) -> Optional[Dict]:
         pred_mean = np.asarray(fc.predicted_mean)
         conf = np.asarray(fc.conf_int(alpha=CONFIDENCE))
 
-        fitted = model.fittedvalues
+        fitted = np.asarray(model.fittedvalues)
         actual = monthly["y"].values[-len(fitted):]
-        metrics = calc_metrics(actual, np.asarray(fitted))
+        metrics_train = calc_metrics(actual, fitted)
 
         last_date = monthly["ds"].iloc[-1]
         dates = pd.date_range(start=last_date + pd.DateOffset(months=1), periods=horizon, freq="MS")
 
-        preds = []
-        for i, dt in enumerate(dates):
-            preds.append({
+        preds = [
+            {
                 "data": dt.strftime("%Y-%m-%d"),
                 "previsto": round(float(pred_mean[i]), 2),
                 "ic_inferior": round(float(conf[i, 0]), 2),
                 "ic_superior": round(float(conf[i, 1]), 2),
-            })
+            }
+            for i, dt in enumerate(dates)
+        ]
 
         return {
             "nome": "Auto ARIMA (SARIMA)",
             "ordem": list(best_order),
             "ordem_sazonal": list(best_seasonal),
             "previsoes": preds,
-            "metricas": metrics,
+            "metricas": metrics_train,
         }
     except Exception as e:
         logger.warning(f"  Auto ARIMA failed: {e}")
@@ -290,7 +306,7 @@ def fit_auto_arima(monthly: pd.DataFrame, horizon: int) -> Optional[Dict]:
 
 
 def _fit_ml_model(monthly: pd.DataFrame, horizon: int, model_cls, model_name: str, **model_kwargs) -> Optional[Dict]:
-    """Generic ML model fitting (Random Forest / XGBoost)."""
+    """Generic ML model fitting (Random Forest / XGBoost) with OOS metrics."""
     try:
         y_all = monthly["y"].values
         months_all = monthly["ds"].dt.month.values
@@ -299,25 +315,62 @@ def _fit_ml_model(monthly: pd.DataFrame, horizon: int, model_cls, model_name: st
         if len(y_all) < n_lags + 2:
             return None
 
+        # OOS holdout for metrics and IC calibration
+        n_oos_actual = min(N_OOS, len(y_all) - MIN_MONTHS)
+        oos_metrics_dict = None
+        oos_residual_std = None
+
+        if n_oos_actual >= 6:
+            train_y = y_all[:-n_oos_actual]
+            train_m = months_all[:-n_oos_actual]
+            test_y = y_all[-n_oos_actual:]
+            n_lags_oos = min(6, len(train_y) - 1)
+
+            X_tr, y_tr = build_lag_features(train_y, train_m, n_lags_oos)
+            if len(X_tr) > 0:
+                m_oos = model_cls(**model_kwargs)
+                m_oos.fit(X_tr, y_tr)
+
+                buf = list(train_y[-n_lags_oos:])
+                oos_preds = []
+                idx_oos = len(train_y)
+                month_oos = int(monthly["ds"].iloc[-n_oos_actual - 1].month)
+                for _ in range(n_oos_actual):
+                    month_oos = (month_oos % 12) + 1
+                    row = np.array([buf[-n_lags_oos:] + [float(month_oos), float(idx_oos)]])
+                    p = float(m_oos.predict(row)[0])
+                    buf.append(p)
+                    oos_preds.append(p)
+                    idx_oos += 1
+
+                oos_preds_arr = np.array(oos_preds)
+                test_y_trimmed = test_y[: len(oos_preds_arr)]
+                oos_residual_std = float(np.std(test_y_trimmed - oos_preds_arr))
+                oos_metrics_dict = calc_metrics(test_y_trimmed, oos_preds_arr)
+
+        # Full model on all data for future predictions
         X, y = build_lag_features(y_all, months_all, n_lags)
         model = model_cls(**model_kwargs)
         model.fit(X, y)
-
         y_pred_train = model.predict(X)
-        metrics = calc_metrics(y, y_pred_train)
 
-        # Iterative multi-step forecast
+        # Pick metrics and IC std
+        if oos_metrics_dict is not None:
+            metrics = oos_metrics_dict
+            std_err = oos_residual_std * 1.96
+        else:
+            # ponytail: in-sample fallback; fires only for very short series
+            logger.warning(f"  {model_name}: série curta, usando métricas in-sample como fallback")
+            metrics = calc_metrics(y, y_pred_train)
+            std_err = float(np.std(y - y_pred_train)) * 1.96
+
         last_date = monthly["ds"].iloc[-1]
-        last_month = int(last_date.month)
         dates = pd.date_range(start=last_date + pd.DateOffset(months=1), periods=horizon, freq="MS")
 
         buf = list(y_all[-n_lags:])
         preds = []
-        residuals = y - y_pred_train
-        std_err = float(np.std(residuals)) * 1.96
-
         idx = len(y_all)
-        month = last_month
+        month = int(last_date.month)
         for dt in dates:
             month = (month % 12) + 1
             row = np.array([buf[-n_lags:] + [float(month), float(idx)]])
@@ -331,12 +384,7 @@ def _fit_ml_model(monthly: pd.DataFrame, horizon: int, model_cls, model_name: st
                 "ic_superior": round(p + std_err, 2),
             })
 
-        result = {
-            "nome": model_name,
-            "previsoes": preds,
-            "metricas": metrics,
-        }
-        return result
+        return {"nome": model_name, "previsoes": preds, "metricas": metrics}
     except Exception as e:
         logger.warning(f"  {model_name} failed: {e}")
         return None
@@ -356,7 +404,76 @@ def fit_xgboost(monthly: pd.DataFrame, horizon: int) -> Optional[Dict]:
                          random_state=42, verbosity=0)
 
 
+def fit_baseline_naive(monthly: pd.DataFrame, horizon: int) -> Optional[Dict]:
+    """
+    Seasonal-naive baseline: predicted[t] = actual[t-12] when available,
+    else actual[t-1] (simple naive). Also computes OOS metrics from holdout.
+    """
+    try:
+        y = monthly["y"].values
+        n = len(y)
+        last_date = monthly["ds"].iloc[-1]
+        dates = pd.date_range(start=last_date + pd.DateOffset(months=1), periods=horizon, freq="MS")
+
+        # Build baseline predictions for future horizon
+        preds = []
+        for i in range(horizon):
+            # Seasonal lag: look back 12 months from forecast step
+            lag = 12
+            idx_src = n - lag + i
+            if idx_src < 0:
+                idx_src = n - 1  # simple naive fallback
+            val = float(y[min(idx_src, n - 1)])
+            preds.append(val)
+
+        # OOS metrics using same seasonal naive logic
+        n_oos_actual = min(N_OOS, n - MIN_MONTHS)
+        oos_metrics_dict = None
+        if n_oos_actual >= 6:
+            test_y = y[-n_oos_actual:]
+            oos_preds = []
+            for i in range(n_oos_actual):
+                lag_idx = n - n_oos_actual - 12 + i
+                if lag_idx < 0:
+                    lag_idx = max(0, n - n_oos_actual - 1)
+                oos_preds.append(float(y[min(lag_idx, n - n_oos_actual - 1)]))
+            oos_metrics_dict = calc_metrics(test_y, np.array(oos_preds))
+
+        # IC from OOS residuals
+        if oos_metrics_dict is not None:
+            test_y_arr = y[-n_oos_actual:]
+            oos_arr = np.array([
+                float(y[min(n - n_oos_actual - 12 + i, n - n_oos_actual - 1)])
+                for i in range(n_oos_actual)
+            ])
+            std_err = float(np.std(test_y_arr - oos_arr)) * 1.96
+        else:
+            std_err = float(np.std(y)) * 1.96
+
+        metrics = oos_metrics_dict if oos_metrics_dict is not None else calc_metrics(y[-horizon:], np.array(preds[:len(y[-horizon:])]))
+
+        pred_dicts = [
+            {
+                "data": d.strftime("%Y-%m-%d"),
+                "previsto": round(p, 2),
+                "ic_inferior": round(p - std_err, 2),
+                "ic_superior": round(p + std_err, 2),
+            }
+            for d, p in zip(dates, preds)
+        ]
+
+        return {
+            "nome": "Baseline Sazonal-Ingênuo",
+            "previsoes": pred_dicts,
+            "metricas": metrics,
+        }
+    except Exception as e:
+        logger.warning(f"  Baseline naive failed: {e}")
+        return None
+
+
 def fit_prophet_model(monthly: pd.DataFrame, horizon: int) -> Optional[Dict]:
+    """Prophet — optional; silently skipped if not installed."""
     if not HAS_PROPHET:
         return None
     try:
@@ -375,26 +492,25 @@ def fit_prophet_model(monthly: pd.DataFrame, horizon: int) -> Optional[Dict]:
         last_date = monthly["ds"].iloc[-1]
         future_fc = fc[fc["ds"] > last_date]
 
-        preds = []
-        for _, row in future_fc.iterrows():
-            preds.append({
+        preds = [
+            {
                 "data": row["ds"].strftime("%Y-%m-%d"),
                 "previsto": round(float(row["yhat"]), 2),
                 "ic_inferior": round(float(row["yhat_lower"]), 2),
                 "ic_superior": round(float(row["yhat_upper"]), 2),
-            })
+            }
+            for _, row in future_fc.iterrows()
+        ]
 
-        # In-sample metrics
-        in_sample = m.predict(df)
-        actual = df["y"].values
-        predicted = in_sample["yhat"].values
-        metrics = calc_metrics(actual, predicted)
+        # OOS metrics via holdout (refit on subset)
+        oos = _oos_holdout(monthly, fit_prophet_model, n_oos=min(N_OOS, len(monthly) - MIN_MONTHS))
+        if oos is not None:
+            metrics = {k: v for k, v in oos.items() if k != "residual_std"}
+        else:
+            in_sample = m.predict(df)
+            metrics = calc_metrics(df["y"].values, in_sample["yhat"].values)
 
-        return {
-            "nome": "Prophet",
-            "previsoes": preds,
-            "metricas": metrics,
-        }
+        return {"nome": "Prophet", "previsoes": preds, "metricas": metrics}
     except Exception as e:
         logger.warning(f"  Prophet failed: {e}")
         return None
@@ -405,41 +521,114 @@ def fit_prophet_model(monthly: pd.DataFrame, horizon: int) -> Optional[Dict]:
 # ---------------------------------------------------------------------------
 
 def load_and_prepare() -> pd.DataFrame:
-    """Load CSV, return DataFrame with data, produto, preco_medio."""
+    """Load CSV with defensive dedup by (data, produto, unidade)."""
     df = pd.read_csv(CSV_PATH, encoding="utf-8-sig")
     df["data"] = pd.to_datetime(df["data"], errors="coerce")
     df = df.dropna(subset=["data"])
+    # Defensive dedup: if duplicates exist per (date, product, unit), average price
+    dedup_cols = [c for c in ["data", "produto", "unidade"] if c in df.columns]
+    if dedup_cols:
+        num_before = len(df)
+        df = df.groupby(dedup_cols, as_index=False)["preco_medio"].mean()
+        if len(df) < num_before:
+            logger.info(f"  Deduplication removed {num_before - len(df)} rows")
     return df
 
 
 def get_eligible_products(df: pd.DataFrame) -> List[str]:
-    """Products with >= MIN_MONTHS of data."""
+    """
+    Products eligible for forecasting:
+    - >= MIN_MONTHS distinct month-year observations
+    - last data point within RECENCY_MONTHS months of today
+    """
+    df = df.copy()
     df["ym"] = df["data"].dt.to_period("M")
-    counts = df.groupby("produto")["ym"].nunique()
+    current_period = pd.Timestamp.now().to_period("M")
+    recency_cutoff = current_period - RECENCY_MONTHS
+
+    last_obs = df.groupby("produto")["ym"].max()
+    recent_products = last_obs[last_obs >= recency_cutoff].index
+
+    counts = df[df["produto"].isin(recent_products)].groupby("produto")["ym"].nunique()
     return sorted(counts[counts >= MIN_MONTHS].index.tolist())
 
 
 def aggregate_monthly(df: pd.DataFrame) -> pd.DataFrame:
-    """Daily -> monthly averages."""
+    """
+    Daily → monthly averages.
+    - Drops current (partial) month.
+    - Reindexes to fill missing months (forward-fill up to 3 consecutive gaps;
+      ponytail: longer gaps stay NaN and are dropped, reducing eligible count).
+    """
     df = df.copy()
     df["ym"] = df["data"].dt.to_period("M")
+
+    # Drop current partial month
+    current_period = pd.Timestamp.now().to_period("M")
+    df = df[df["ym"] < current_period]
+
     monthly = df.groupby("ym").agg({"preco_medio": "mean"}).reset_index()
-    monthly["ds"] = monthly["ym"].dt.to_timestamp()
-    monthly["y"] = monthly["preco_medio"]
-    return monthly.sort_values("ds").reset_index(drop=True)
+
+    if monthly.empty:
+        return pd.DataFrame(columns=["ym", "ds", "y"])
+
+    # Reindex to fill missing months
+    full_idx = pd.period_range(monthly["ym"].min(), monthly["ym"].max(), freq="M")
+    y_series = pd.Series(monthly["preco_medio"].values, index=monthly["ym"].values)
+    y_series = y_series.reindex(full_idx)
+    # Forward-fill short gaps (up to 3 months); longer gaps stay NaN
+    y_series = y_series.ffill(limit=3)
+    y_series = y_series.dropna()
+
+    result = pd.DataFrame({"ym": y_series.index, "y": y_series.values})
+    result["ds"] = result["ym"].apply(lambda p: p.to_timestamp())
+    return result.sort_values("ds").reset_index(drop=True)
+
+
+def _apply_oos_metrics(result: Dict, monthly: pd.DataFrame, fit_fn, model_key: str) -> Dict:
+    """
+    Run OOS holdout for a model and overwrite its metricas with OOS values.
+    Also update IC band width in previsoes using OOS residual std (for linear/ML models).
+    """
+    n_oos_actual = min(N_OOS, len(monthly) - MIN_MONTHS)
+    if n_oos_actual < 6:
+        return result
+
+    oos = _oos_holdout(monthly, fit_fn, n_oos=n_oos_actual)
+    if oos is None:
+        return result
+
+    oos_clean = {k: v for k, v in oos.items() if k != "residual_std"}
+    result["metricas"] = oos_clean
+
+    # Update IC band for linear/ML models (ARIMA uses its own analytical CI)
+    if model_key in ("linear", "random_forest", "xgboost") and oos.get("residual_std") is not None:
+        std_err = oos["residual_std"] * 1.96
+        new_preds = []
+        for p in result.get("previsoes", []):
+            pv = p["previsto"]
+            new_preds.append({
+                "data": p["data"],
+                "previsto": pv,
+                "ic_inferior": round(pv - std_err, 2),
+                "ic_superior": round(pv + std_err, 2),
+            })
+        result["previsoes"] = new_preds
+
+    return result
 
 
 def generate_product_forecast(product: str, product_df: pd.DataFrame) -> Dict:
-    """Run all models for one product."""
+    """Run all models for one product, compute OOS metrics, pick best model."""
     monthly = aggregate_monthly(product_df)
 
     if len(monthly) < MIN_MONTHS:
         return {"success": False, "produto": product, "error": f"Dados insuficientes: {len(monthly)} meses"}
 
-    result = {
+    result: Dict = {
         "success": False,
         "produto": product,
-        "gerado_em": datetime.now().isoformat(),
+        "gerado_em": datetime.now(timezone.utc).isoformat(),
         "horizonte_meses": HORIZON_MONTHS,
         "meses_historico": len(monthly),
         "historico": [
@@ -449,39 +638,78 @@ def generate_product_forecast(product: str, product_df: pd.DataFrame) -> Dict:
         "modelos": {},
     }
 
-    models = [
+    model_specs = [
         ("linear", fit_linear),
         ("arima", fit_arima),
         ("auto_arima", fit_auto_arima),
         ("random_forest", fit_random_forest),
         ("xgboost", fit_xgboost),
+        ("baseline_naive", fit_baseline_naive),
         ("prophet", fit_prophet_model),
     ]
 
-    for key, fn in models:
+    for key, fn in model_specs:
         logger.info(f"  Fitting {key}...")
         m = fn(monthly, HORIZON_MONTHS)
-        if m is not None:
-            result["modelos"][key] = m
+        if m is None:
+            continue
+
+        # OOS metrics: baseline_naive handles its own; others go through _apply_oos_metrics
+        if key not in ("baseline_naive", "prophet"):
+            m = _apply_oos_metrics(m, monthly, fn, key)
+
+        # Strip internal keys not meant for JSON
+        m = {k: v for k, v in m.items() if not k.startswith("_")}
+        result["modelos"][key] = m
 
     result["success"] = len(result["modelos"]) > 0
     if not result["success"]:
         result["error"] = "Nenhum modelo conseguiu gerar previsões"
+        return sanitize_for_json(result)
 
-    return result
+    # Select best model by OOS MAE (exclude baseline from the "winner" selection
+    # so the front can compare; baseline is always shown)
+    candidate_keys = [k for k in result["modelos"] if k != "baseline_naive"]
+    best_model = None
+    best_mae = float("inf")
+    for k in candidate_keys:
+        mae = result["modelos"][k].get("metricas", {}).get("mae")
+        if mae is not None and mae < best_mae:
+            best_mae = mae
+            best_model = k
+
+    result["best_model"] = best_model
+
+    return sanitize_for_json(result)
 
 
 def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate agricultural price forecasts")
+    parser.add_argument("--output-dir", default=None,
+                        help="Override output directory for forecast JSONs")
+    parser.add_argument("--products-json", default=None,
+                        help="Override output path for forecast_products.json")
+    args = parser.parse_args()
+
+    global OUTPUT_DIR, PRODUCTS_JSON
+    if args.output_dir:
+        OUTPUT_DIR = Path(args.output_dir)
+    if args.products_json:
+        PRODUCTS_JSON = Path(args.products_json)
+
     logger.info("=== Generating forecasts ===")
     logger.info(f"CSV: {CSV_PATH}")
+    logger.info(f"Output: {OUTPUT_DIR}")
 
     if not CSV_PATH.exists():
         logger.error(f"File not found: {CSV_PATH}")
-        return
+        sys.exit(1)
 
     df = load_and_prepare()
     products = get_eligible_products(df)
-    logger.info(f"Eligible products: {len(products)}")
+    logger.info(f"Eligible products (recent + {MIN_MONTHS}+ months): {len(products)}")
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -501,22 +729,34 @@ def main():
         if result["success"]:
             success_count += 1
             models_ok = list(result["modelos"].keys())
-            product_list.append({"produto": product, "slug": slug, "modelos": models_ok})
-            logger.info(f"  OK — models: {models_ok}")
+            product_list.append({
+                "produto": product,
+                "slug": slug,
+                "modelos": models_ok,
+                "best_model": result.get("best_model"),
+            })
+            logger.info(f"  OK — models: {models_ok}, best: {result.get('best_model')}")
         else:
             logger.warning(f"  FAILED — {result.get('error')}")
 
+    # Remove orphan forecast files (products no longer eligible)
+    eligible_slugs = {slugify(p) for p in products}
+    for orphan in OUTPUT_DIR.glob("*.json"):
+        if orphan.stem not in eligible_slugs:
+            logger.info(f"  Removing orphan: {orphan.name}")
+            orphan.unlink()
+
     # Write products index
     index = {
-        "gerado_em": datetime.now().isoformat(),
+        "gerado_em": datetime.now(timezone.utc).isoformat(),
         "total": len(product_list),
         "produtos": product_list,
     }
+    PRODUCTS_JSON.parent.mkdir(parents=True, exist_ok=True)
     with open(PRODUCTS_JSON, "w", encoding="utf-8") as f:
         json.dump(index, f, ensure_ascii=False, indent=2)
 
     logger.info(f"=== Done: {success_count}/{len(products)} products forecasted ===")
-    logger.info(f"Output: {OUTPUT_DIR}")
     logger.info(f"Index: {PRODUCTS_JSON}")
 
 
