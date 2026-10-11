@@ -71,8 +71,9 @@ def load_scraper_state() -> dict:
         try:
             with open(STATE_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            pass
+        except (json.JSONDecodeError, IOError) as e:
+            logger.error(f"Corrupted scraper state file {STATE_FILE}: {e} — resetting to default")
+            raise
     return {"last_found_id": 2520}
 
 
@@ -316,6 +317,8 @@ def scrape_latest_quotations(days_back: int = 7, backfill: bool = False):
     # so we rely on state_id which tracks the highest ID with RECENT data.
     state = load_scraper_state()
     state_id = state.get("last_found_id", 2520)
+    # Rescan the last known ID: its xlsx may have been published after the
+    # previous run. Re-downloading it is harmless (ETL merges and dedups).
     start_id = state_id
 
     max_scan = MAX_FORWARD_SCAN if not backfill else 1500
@@ -385,10 +388,10 @@ def update_links_file(new_links: List[str]):
         with open(LINKS_FILE, 'r', encoding='utf-8') as f:
             existing_links = set(line.strip() for line in f if line.strip())
 
-    # Add new links at the top
+    # Add new links and write sorted for stable diffs
     new_unique = [link for link in new_links if link not in existing_links]
     if new_unique:
-        all_links = new_unique + list(existing_links)
+        all_links = sorted(existing_links | set(new_unique))
         with open(LINKS_FILE, 'w', encoding='utf-8') as f:
             for link in all_links:
                 f.write(link + '\n')

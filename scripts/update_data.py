@@ -102,9 +102,9 @@ def step_process_new_files(new_files):
     else:
         combined_df = new_df
 
-    # Deduplicate
+    # Deduplicate on business key (data, produto, unidade)
     before_dedup = len(combined_df)
-    combined_df = combined_df.drop_duplicates(subset=['data', 'produto', 'preco_medio'])
+    combined_df = combined_df.drop_duplicates(subset=['data', 'produto', 'unidade'], keep='last')  # newest parse wins
     logger.info(f"After dedup: {len(combined_df)} records (removed {before_dedup - len(combined_df)} dupes)")
 
     # Sort
@@ -162,28 +162,28 @@ def step_process_regional_files(new_files):
     if 'preco_medio' in new_df.columns and 'preco' in new_df.columns:
         new_df = new_df.drop(columns=['preco_medio'])
 
-    # Load existing regional data
-    if CONSOLIDATED_REGIONAL_CSV.exists():
-        existing_df = pd.read_csv(CONSOLIDATED_REGIONAL_CSV, encoding='utf-8-sig')
+    # Load existing regional data via storage helper
+    from api.storage import load_regional
+    existing_df = load_regional()
+    if not existing_df.empty:
         logger.info(f"Existing regional: {len(existing_df)} records")
-
-        # Append new records
         combined_df = pd.concat([existing_df, new_df], ignore_index=True)
     else:
         combined_df = new_df
 
-    # Deduplicate
+    # Deduplicate on business key (data, produto, unidade, regional)
     before_dedup = len(combined_df)
-    combined_df = combined_df.drop_duplicates(subset=['data', 'produto', 'regional', 'preco'])
+    dedup_cols = ['data', 'produto', 'unidade', 'regional'] if 'unidade' in combined_df.columns else ['data', 'produto', 'regional', 'preco']
+    combined_df = combined_df.drop_duplicates(subset=dedup_cols, keep='last')  # newest parse wins
     logger.info(f"After dedup: {len(combined_df)} records (removed {before_dedup - len(combined_df)} dupes)")
 
     # Sort
     combined_df = combined_df.sort_values(['ano', 'mes', 'dia', 'regional', 'produto'], na_position='last')
 
-    # Save
-    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    combined_df.to_csv(CONSOLIDATED_REGIONAL_CSV, index=False, encoding='utf-8-sig')
-    logger.info(f"Saved regional CSV: {len(combined_df)} records")
+    # Save via storage helper (year-partitioned)
+    from api.storage import save_regional
+    save_regional(combined_df)
+    logger.info(f"Saved regional records: {len(combined_df)}")
 
     return True
 
@@ -230,10 +230,9 @@ def step_forecasts():
     if result.stdout:
         logger.info(result.stdout[-2000:])
     if result.returncode != 0:
-        logger.error(f"Forecast generation failed (exit {result.returncode})")
+        logger.warning(f"Forecast generation failed (exit {result.returncode}) — non-fatal")
         if result.stderr:
-            logger.error(result.stderr[-1000:])
-        raise RuntimeError("Forecast generation failed")
+            logger.warning(result.stderr[-1000:])
 
 
 # Exit codes consumed by .github/workflows/data-pipeline.yml.
@@ -311,13 +310,11 @@ def main():
         logger.exception("Copy failed")
         errors.append(f"copy_json: {e}")
 
-    # Step 5: Forecasts
+    # Step 5: Forecasts (non-fatal: dashboard works without updated forecasts)
     try:
         step_forecasts()
     except Exception as e:
-        logger.exception("Forecast generation failed")
-        errors.append(f"forecasts: {e}")
-        # Non-fatal: dashboard still works without new forecasts
+        logger.warning(f"Forecast generation failed (non-fatal): {e}")
 
     # Only delete Excel files AFTER confirmed successful processing
     if copy_success and DAILY_DIR.exists():

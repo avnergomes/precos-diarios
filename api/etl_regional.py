@@ -789,8 +789,8 @@ def normalize_product_name(name: str) -> Optional[str]:
         (r'(?i)arroz\s*em\s*casca\s*irrigado', 'Arroz em casca irrigado'),
         (r'(?i)arroz\s*em\s*casca\s*sequeiro', 'Arroz em casca sequeiro'),
         (r'(?i)arroz\s*em\s*casca', 'Arroz em casca tipo 1'),
-        (r'(?i)su[ií]no\s*vivo', 'Suíno vivo'),
-        (r'(?i)su[ií]no', 'Suíno vivo'),
+        (r'(?i)su[ií]no\s*vivo', 'Suíno em pé tipo carne não integrado'),
+        (r'(?i)su[ií]no', 'Suíno em pé tipo carne não integrado'),
         (r'(?i)mandioca\s*ind', 'Mandioca industrial'),
         (r'(?i)mandioca\s*mesa', 'Mandioca de mesa'),
         (r'(?i)mandioca', 'Mandioca industrial'),
@@ -925,7 +925,13 @@ def process_sheet_regional(df: pd.DataFrame, date: datetime, filename: str) -> L
 
 
 # Sheets that contain discontinued/metadata info, not daily price data
-SKIP_SHEETS = {'base net', 'base', 'índice', 'indice', 'planilha1', 'planilha2', 'planilha3'}
+_SKIP_SHEET_EXACT = {'base net', 'base', 'índice', 'indice'}
+
+
+def _is_skip_sheet(name: str) -> bool:
+    """Return True for non-data auxiliary sheets (planilhaN, base*, indice)."""
+    n = name.lower().strip()
+    return bool(re.match(r'^planilha\d*$|^plan\d*$', n)) or n in _SKIP_SHEET_EXACT
 
 
 def process_excel_file(filepath: Path) -> List[dict]:
@@ -942,7 +948,7 @@ def process_excel_file(filepath: Path) -> List[dict]:
 
         for sheet_name in xl.sheet_names:
             # Skip non-data sheets
-            if sheet_name.lower().strip() in SKIP_SHEETS:
+            if _is_skip_sheet(sheet_name):
                 continue
 
             # CASCADE 1: Try to parse date from sheet name
@@ -1087,16 +1093,25 @@ def process_all_files():
     logger.info("Consolidating data...")
     df = pd.DataFrame(all_records)
 
-    # Remove duplicates
-    df = df.drop_duplicates(subset=['data', 'produto', 'regional', 'preco'])
+    # Merge with existing partitions instead of overwriting them (data/extracted
+    # is gitignored; a clean checkout would otherwise wipe the history).
+    from api.storage import load_regional
+    existing = load_regional()
+    if not existing.empty:
+        logger.info(f"Merging with {len(existing)} existing regional records")
+        df = pd.concat([existing, df], ignore_index=True)
+
+    # Remove duplicates - business key; newest parse wins
+    df = df.drop_duplicates(subset=['data', 'produto', 'unidade', 'regional'], keep='last')
     logger.info(f"After dedup: {len(df)} records")
 
     # Sort
     df = df.sort_values(['ano', 'mes', 'dia', 'produto', 'regional'], na_position='last')
 
-    # Save regional granular data
-    df.to_csv(OUTPUT_FILE_REGIONAL, index=False, encoding='utf-8-sig')
-    logger.info(f"Saved regional to: {OUTPUT_FILE_REGIONAL}")
+    # Save regional granular data (year-partitioned via storage)
+    from api.storage import save_regional
+    save_regional(df)
+    logger.info(f"Saved regional (partitioned) for {df['ano'].nunique()} years")
 
     # Generate aggregated version for backwards compatibility
     generate_aggregated_csv(df)

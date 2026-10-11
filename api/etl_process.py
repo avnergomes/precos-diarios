@@ -37,10 +37,10 @@ OUTPUT_FILE = DATA_PROCESSED_DIR / "consolidated.csv"
 
 # Category mappings for products
 CATEGORIAS = {
-    'SOJA': 'Graos', 'MILHO': 'Graos', 'TRIGO': 'Graos', 'FEIJAO': 'Graos',
-    'ARROZ': 'Graos', 'AVEIA': 'Graos', 'CEVADA': 'Graos', 'CENTEIO': 'Graos',
-    'SORGO': 'Graos', 'TRITICALE': 'Graos', 'CANOLA': 'Graos', 'GIRASSOL': 'Graos',
-    'AMENDOIM': 'Graos', 'CAFE': 'Cafe', 'ALGODAO': 'Graos',
+    'SOJA': 'Grãos', 'MILHO': 'Grãos', 'TRIGO': 'Grãos', 'FEIJAO': 'Grãos',
+    'ARROZ': 'Grãos', 'AVEIA': 'Grãos', 'CEVADA': 'Grãos', 'CENTEIO': 'Grãos',
+    'SORGO': 'Grãos', 'TRITICALE': 'Grãos', 'CANOLA': 'Grãos', 'GIRASSOL': 'Grãos',
+    'AMENDOIM': 'Grãos', 'CAFE': 'Café', 'ALGODAO': 'Grãos',
     'LARANJA': 'Frutas', 'BANANA': 'Frutas', 'UVA': 'Frutas', 'MACA': 'Frutas',
     'MELANCIA': 'Frutas', 'MELAO': 'Frutas', 'MAMAO': 'Frutas', 'ABACAXI': 'Frutas',
     'MORANGO': 'Frutas', 'PESSEGO': 'Frutas', 'AMEIXA': 'Frutas', 'FIGO': 'Frutas',
@@ -52,9 +52,9 @@ CATEGORIAS = {
     'COUVE': 'Hortalicas', 'PEPINO': 'Hortalicas', 'PIMENTAO': 'Hortalicas',
     'ABOBRINHA': 'Hortalicas', 'ABOBORA': 'Hortalicas', 'CHUCHU': 'Hortalicas',
     'QUIABO': 'Hortalicas', 'BERINJELA': 'Hortalicas', 'VAGEM': 'Hortalicas',
-    'BOI': 'Pecuaria', 'VACA': 'Pecuaria', 'NOVILHO': 'Pecuaria', 'BEZERRO': 'Pecuaria',
-    'SUINO': 'Pecuaria', 'PORCO': 'Pecuaria', 'FRANGO': 'Pecuaria', 'GALINHA': 'Pecuaria',
-    'OVO': 'Pecuaria', 'OVINO': 'Pecuaria', 'CAPRINO': 'Pecuaria', 'LEITE': 'Pecuaria',
+    'BOI': 'Pecuária', 'VACA': 'Pecuária', 'NOVILHO': 'Pecuária', 'BEZERRO': 'Pecuária',
+    'SUINO': 'Pecuária', 'PORCO': 'Pecuária', 'FRANGO': 'Pecuária', 'GALINHA': 'Pecuária',
+    'OVO': 'Pecuária', 'OVINO': 'Pecuária', 'CAPRINO': 'Pecuária', 'LEITE': 'Pecuária',
     'MADEIRA': 'Florestal', 'LENHA': 'Florestal', 'PINUS': 'Florestal',
     'EUCALIPTO': 'Florestal', 'ERVA-MATE': 'Florestal', 'ERVA MATE': 'Florestal',
 }
@@ -379,8 +379,8 @@ def parse_date_from_sheet(sheet_name: str, filename: str) -> Optional[datetime]:
     """Parse date from sheet name, falling back to filename."""
     sheet_stripped = sheet_name.strip()
 
-    # Pattern 1: DD-MM-YYYY or DD_MM_YYYY (e.g., '04-03-2026')
-    match = re.match(r'^(\d{2})[-_](\d{2})[-_](\d{4})$', sheet_stripped)
+    # Pattern 1: DD-MM-YYYY, DD_MM_YYYY, DD/MM/YYYY, DD.MM.YYYY
+    match = re.match(r'^(\d{2})[-_/.](\d{2})[-_/.](\d{4})$', sheet_stripped)
     if match:
         day, month, year = int(match.group(1)), int(match.group(2)), int(match.group(3))
         try:
@@ -388,8 +388,8 @@ def parse_date_from_sheet(sheet_name: str, filename: str) -> Optional[datetime]:
         except ValueError:
             pass
 
-    # Pattern 2: DD-MM-YY or DD_MM_YY (e.g., '01-08-19')
-    match = re.match(r'^(\d{2})[-_](\d{2})[-_](\d{2})$', sheet_stripped)
+    # Pattern 2: DD-MM-YY, DD/MM/YY, DD.MM.YY
+    match = re.match(r'^(\d{2})[-_/.](\d{2})[-_/.](\d{2})$', sheet_stripped)
     if match:
         day, month, yy = int(match.group(1)), int(match.group(2)), int(match.group(3))
         year = 2000 + yy if yy < 50 else 1900 + yy
@@ -398,8 +398,8 @@ def parse_date_from_sheet(sheet_name: str, filename: str) -> Optional[datetime]:
         except ValueError:
             pass
 
-    # Pattern 3: DD-M-YY (single-digit month, e.g., '31-3-20')
-    match = re.match(r'^(\d{1,2})[-_](\d{1,2})[-_](\d{2,4})$', sheet_stripped)
+    # Pattern 3: DD-M-YY with any separator (single-digit month, e.g., '31-3-20')
+    match = re.match(r'^(\d{1,2})[-_/.](\d{1,2})[-_/.](\d{2,4})$', sheet_stripped)
     if match:
         day, month, year = int(match.group(1)), int(match.group(2)), int(match.group(3))
         if year < 100:
@@ -443,8 +443,8 @@ def parse_date_from_sheet(sheet_name: str, filename: str) -> Optional[datetime]:
                 except ValueError:
                     pass
 
-    # Fall back to filename date extraction (handles YYYY-MM-DD prefix)
-    return parse_date_from_filename(filename)
+    # Unrecognized sheet name - return None so caller can skip it
+    return None
 
 
 def _extract_month_year_from_filename(filename: str) -> Tuple[Optional[int], Optional[int]]:
@@ -491,7 +491,10 @@ def parse_number(value) -> Optional[float]:
     value = re.sub(r'R\$\s*', '', value)
     value = re.sub(r'\s+', '', value)
 
-    if ',' in value:
+    # Detect pure thousands format: '2.000', '1.234.567' (no comma)
+    if re.match(r'^\d{1,3}(\.\d{3})+$', value):
+        value = value.replace('.', '')
+    elif ',' in value:
         if '.' in value and value.rindex('.') < value.rindex(','):
             value = value.replace('.', '')
         value = value.replace(',', '.')
@@ -609,7 +612,13 @@ def process_sheet(df: pd.DataFrame, date: datetime, filename: str) -> List[dict]
 
 
 # Sheets that contain discontinued/metadata info, not daily price data
-SKIP_SHEETS = {'base net', 'base', 'índice', 'indice', 'planilha1', 'planilha2', 'planilha3'}
+_SKIP_SHEET_EXACT = {'base net', 'base', 'índice', 'indice'}
+
+
+def _is_skip_sheet(name: str) -> bool:
+    """Return True for non-data auxiliary sheets (planilhaN, base*, indice)."""
+    n = name.lower().strip()
+    return bool(re.match(r'^planilha\d*$|^plan\d*$', n)) or n in _SKIP_SHEET_EXACT
 
 
 def process_excel_file(filepath: Path) -> List[dict]:
@@ -622,7 +631,7 @@ def process_excel_file(filepath: Path) -> List[dict]:
 
         for sheet_name in xl.sheet_names:
             # Skip non-data sheets
-            if sheet_name.lower().strip() in SKIP_SHEETS:
+            if _is_skip_sheet(sheet_name):
                 continue
 
             date = parse_date_from_sheet(sheet_name, filepath.stem)
@@ -635,7 +644,8 @@ def process_excel_file(filepath: Path) -> List[dict]:
                 df = pd.read_excel(xl, sheet_name=sheet_name, header=None)
                 records = process_sheet(df, date, filepath.name)
                 all_records.extend(records)
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Error processing sheet '{sheet_name}' in {filepath.name}: {e}")
                 continue
 
     except Exception as e:
@@ -782,7 +792,7 @@ def process_excel_file_regional(filepath: Path) -> List[dict]:
 
         for sheet_name in xl.sheet_names:
             # Skip non-data sheets
-            if sheet_name.lower().strip() in SKIP_SHEETS:
+            if _is_skip_sheet(sheet_name):
                 continue
 
             date = parse_date_from_sheet(sheet_name, filepath.stem)
@@ -800,7 +810,8 @@ def process_excel_file_regional(filepath: Path) -> List[dict]:
                 if col_to_regional:
                     records = process_sheet_regional(df, date, filepath.name, col_to_regional)
                     all_records.extend(records)
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Error processing regional sheet '{sheet_name}' in {filepath.name}: {e}")
                 continue
 
     except Exception as e:
@@ -859,6 +870,7 @@ def normalize_products(df: pd.DataFrame) -> pd.DataFrame:
         r'(?i)vaca.*(em\s*)?p[eé]': 'Vaca em pé',
         r'(?i)^vaca\s*$': 'Vaca em pé',
         # Livestock - Suíno (using . for í/é/ã to handle encoding issues)
+        r'(?i)su[ií]no\s*vivo': 'Suíno em pé tipo carne não integrado',
         r'(?i)su.no\s*(em\s*)?p.\s*tipo\s*carne\s*n.o\s*integrado': 'Suíno em pé tipo carne não integrado',
         r'(?i)su.no\s*(em\s*)?p.\s*tipo\s*carne': 'Suíno em pé tipo carne',
         r'(?i)su.noemp.\s*tipocarne': 'Suíno em pé tipo carne',
@@ -867,7 +879,7 @@ def normalize_products(df: pd.DataFrame) -> pd.DataFrame:
         r'(?i)frango.*corte': 'Frango de corte',
         # Forestry
         r'(?i)erva[\s\-]?mate\s*folha\s*(em\s*)?barranco': 'Erva-mate folha em barranco',
-        r'(?i)erva[\s\-]?mate': 'Erva-mate',
+        r'(?i)erva[\s\-]?mate': 'Erva-mate folha em barranco',
         # Vegetables
         r'(?i)mandioca\s*industrial': 'Mandioca industrial',
         r'(?i)mandioca.*amido': 'Mandioca industrial',
@@ -959,6 +971,10 @@ def normalize_products(df: pd.DataFrame) -> pd.DataFrame:
     # Set canonical units for each product
     df['unidade'] = df['produto'].apply(get_canonical_unit)
 
+    # Normalize unit casing: standalone 'Kg'→'kg', 'Kg renda'→'kg renda'
+    _unit_fix = {'Kg': 'kg', 'Kg renda': 'kg renda'}
+    df['unidade'] = df['unidade'].map(lambda u: _unit_fix.get(u, u) if pd.notna(u) else u)
+
     return df
 
 
@@ -1017,8 +1033,16 @@ def process_all_files():
     logger.info("Normalizing product names...")
     df = normalize_products(df)
 
-    # Remove duplicates
-    df = df.drop_duplicates(subset=['data', 'produto', 'preco_medio'])
+    # Merge with the existing CSV instead of overwriting it: data/extracted is
+    # gitignored, so a clean checkout only has a few Excel files and an
+    # overwrite would wipe the history. Freshly parsed rows win on conflict.
+    if OUTPUT_FILE.exists():
+        existing = normalize_products(pd.read_csv(OUTPUT_FILE, encoding='utf-8-sig'))
+        logger.info(f"Merging with {len(existing)} existing records")
+        df = pd.concat([existing, df], ignore_index=True)
+
+    # Remove duplicates - key is (data, produto, unidade); newest parse wins
+    df = df.drop_duplicates(subset=['data', 'produto', 'unidade'], keep='last')
     logger.info(f"After dedup: {len(df)} records")
 
     # Sort

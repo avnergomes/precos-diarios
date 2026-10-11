@@ -9,7 +9,7 @@ Supports both aggregated and regional granularity data.
 import json
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 import pandas as pd
 import numpy as np
 
@@ -22,7 +22,7 @@ DATA_DIR = BASE_DIR / "data"
 DATA_PROCESSED_DIR = DATA_DIR / "processed"
 JSON_DIR = DATA_DIR / "json"
 INPUT_FILE = DATA_PROCESSED_DIR / "consolidated.csv"
-INPUT_FILE_REGIONAL = DATA_PROCESSED_DIR / "consolidated_regional.csv"
+QUARANTINE_FILE = DATA_PROCESSED_DIR / "quarantine.csv"
 
 # Lista de regionais padrão do IDR-Paraná
 REGIONAIS_PADRAO = [
@@ -52,33 +52,47 @@ def fix_encoding(text):
     return text
 
 
+def _quarantine(rows: pd.DataFrame, motivo: str) -> None:
+    """Append rows to QUARANTINE_FILE. Aggregated and regional rows have
+    different columns, so merge in pandas (column union) instead of a raw
+    CSV append, which would produce ragged lines."""
+    rows = rows.assign(motivo_quarentena=motivo)
+    if QUARANTINE_FILE.exists():
+        rows = pd.concat([pd.read_csv(QUARANTINE_FILE, encoding='utf-8-sig'), rows], ignore_index=True)
+    rows.to_csv(QUARANTINE_FILE, index=False, encoding='utf-8-sig')
+
+
 def load_data(regional: bool = False) -> pd.DataFrame:
     """Load consolidated data.
 
     Args:
         regional: If True, load regional data; if False, load aggregated data
     """
-    input_file = INPUT_FILE_REGIONAL if regional else INPUT_FILE
-    logger.info(f"Loading {'regional' if regional else 'aggregated'} data from {input_file}...")
-
-    if not input_file.exists():
-        logger.warning(f"File not found: {input_file}")
-        if regional:
-            logger.info("Falling back to aggregated data")
+    if regional:
+        # Regional data lives in year partitions (api/storage.py); falls back to
+        # the legacy single file inside load_regional().
+        from api.storage import load_regional
+        input_file = 'data/processed/regional/'
+        logger.info("Loading regional data from year partitions...")
+        df = load_regional()
+        if df.empty:
+            logger.info("No regional data; falling back to aggregated data")
             return load_data(regional=False)
-        return pd.DataFrame()
-
-    # Try multiple encodings
-    df = None
-    for encoding in ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']:
+    else:
+        input_file = INPUT_FILE
+        logger.info(f"Loading aggregated data from {input_file}...")
+        if not input_file.exists():
+            logger.warning(f"File not found: {input_file}")
+            return pd.DataFrame()
+        # All CSVs are written with utf-8-sig; fail loud on wrong encoding
         try:
-            df = pd.read_csv(input_file, encoding=encoding)
-            break
-        except Exception:
-            continue
+            df = pd.read_csv(input_file, encoding='utf-8-sig')
+        except Exception as e:
+            logger.error(f"Failed to load {input_file} as utf-8-sig: {e}")
+            raise
 
-    if df is None or df.empty:
-        logger.error(f"Failed to load data from {input_file}")
+    if df.empty:
+        logger.error(f"Empty data from {input_file}")
         return pd.DataFrame()
 
     df['ano'] = pd.to_numeric(df['ano'], errors='coerce')
@@ -87,6 +101,12 @@ def load_data(regional: bool = False) -> pd.DataFrame:
     # Handle different column names for price
     price_col = 'preco' if 'preco' in df.columns else 'preco_medio'
     df[price_col] = pd.to_numeric(df[price_col], errors='coerce')
+
+    # Quarantine invalid prices before filtering
+    invalid_mask = df[price_col].isna() | (df[price_col] <= 0)
+    if invalid_mask.any():
+        _quarantine(df[invalid_mask], 'preco_invalido')
+        logger.warning(f"Quarantined {invalid_mask.sum()} rows with price <= 0 → {QUARANTINE_FILE}")
 
     df = df[df[price_col].notna() & (df[price_col] > 0)]
 
@@ -124,6 +144,21 @@ def load_data(regional: bool = False) -> pd.DataFrame:
     )
     df['categoria'] = df['produto'].map(product_main_category)
 
+    # Normalize unit casing: 'Kg'→'kg', 'Kg renda'→'kg renda'
+    _unit_fix = {'Kg': 'kg', 'Kg renda': 'kg renda'}
+    if 'unidade' in df.columns:
+        df['unidade'] = df['unidade'].map(lambda u: _unit_fix.get(u, u) if pd.notna(u) else u)
+
+    # Outlier detection: quarantine prices >10x or <0.1x per-product+unit median
+    price_col_used = 'preco' if 'preco' in df.columns and 'preco_medio' not in df.columns else 'preco_medio'
+    if price_col_used in df.columns and 'unidade' in df.columns:
+        medians = df.groupby(['produto', 'unidade'])[price_col_used].transform('median')
+        outlier_mask = ((df[price_col_used] > medians * 10) | (df[price_col_used] < medians * 0.1)) & medians.notna()
+        if outlier_mask.any():
+            _quarantine(df[outlier_mask], 'outlier_preco')
+            logger.warning(f"Quarantined {outlier_mask.sum()} outlier rows → {QUARANTINE_FILE}")
+            df = df[~outlier_mask]
+
     df['periodo'] = df.apply(
         lambda x: f"{int(x['ano'])}-{int(x['mes']):02d}" if pd.notna(x['mes']) else f"{int(x['ano'])}",
         axis=1
@@ -147,7 +182,7 @@ def generate_aggregated_data(df: pd.DataFrame) -> dict:
     """
     agg = {
         'metadata': {
-            'generated_at': datetime.now().isoformat(),
+            'generated_at': datetime.now(timezone.utc).isoformat(),
             'total_records': len(df),
             'year_min': int(df['ano'].min()),
             'year_max': int(df['ano'].max()),
@@ -183,8 +218,11 @@ def generate_aggregated_data(df: pd.DataFrame) -> dict:
         anos = sorted(grp['ano'].dropna().unique(), reverse=True)
         variacao = None
         if len(anos) >= 2:
-            atual = grp[grp['ano'] == anos[0]]['preco_medio'].mean()
-            anterior = grp[grp['ano'] == anos[1]]['preco_medio'].mean()
+            # YTD: compare same months in both years to avoid partial-year bias
+            current_months = grp[grp['ano'] == anos[0]]['mes'].dropna().unique()
+            max_month = int(max(current_months)) if len(current_months) else 12
+            atual = grp[(grp['ano'] == anos[0]) & (grp['mes'] <= max_month)]['preco_medio'].mean()
+            anterior = grp[(grp['ano'] == anos[1]) & (grp['mes'] <= max_month)]['preco_medio'].mean()
             if pd.notna(atual) and pd.notna(anterior) and anterior > 0:
                 variacao = round(float((atual - anterior) / anterior * 100), 2)
 
@@ -336,7 +374,7 @@ def generate_daily_series(df: pd.DataFrame) -> dict:
                 for _, row in prod_df.iterrows()
             ]
 
-    return {'products': daily, 'generated_at': datetime.now().isoformat()}
+    return {'products': daily, 'generated_at': datetime.now(timezone.utc).isoformat()}
 
 
 def generate_volatility(df: pd.DataFrame) -> dict:
@@ -363,7 +401,7 @@ def generate_volatility(df: pd.DataFrame) -> dict:
                     'n': len(grp),
                 }
 
-    return {'by_product': vol, 'generated_at': datetime.now().isoformat()}
+    return {'by_product': vol, 'generated_at': datetime.now(timezone.utc).isoformat()}
 
 
 def generate_regional_spread(df: pd.DataFrame) -> dict:
@@ -374,7 +412,7 @@ def generate_regional_spread(df: pd.DataFrame) -> dict:
     # Check if min/max columns exist
     if 'preco_minimo' not in df.columns or 'preco_maximo' not in df.columns:
         logger.warning("preco_minimo/preco_maximo columns not found, skipping spread calculation")
-        return {'by_product': {}, 'generated_at': datetime.now().isoformat()}
+        return {'by_product': {}, 'generated_at': datetime.now(timezone.utc).isoformat()}
 
     # Filter rows with valid min/max
     df_valid = df[df['preco_minimo'].notna() & df['preco_maximo'].notna()].copy()
@@ -393,7 +431,7 @@ def generate_regional_spread(df: pd.DataFrame) -> dict:
                     'mean': round(pmean, 2),
                 }
 
-    return {'by_product': spread, 'generated_at': datetime.now().isoformat()}
+    return {'by_product': spread, 'generated_at': datetime.now(timezone.utc).isoformat()}
 
 
 # ============================================================================
@@ -406,7 +444,7 @@ def generate_regional_prices(df: pd.DataFrame) -> dict:
 
     if 'regional' not in df.columns:
         logger.warning("No regional column found - skipping regional prices")
-        return {'by_regional': {}, 'generated_at': datetime.now().isoformat()}
+        return {'by_regional': {}, 'generated_at': datetime.now(timezone.utc).isoformat()}
 
     prices = {'by_regional': {}, 'by_product_regional': {}}
 
@@ -433,7 +471,7 @@ def generate_regional_prices(df: pd.DataFrame) -> dict:
 
         prices['by_product_regional'].setdefault(produto, {})[regional] = series
 
-    prices['generated_at'] = datetime.now().isoformat()
+    prices['generated_at'] = datetime.now(timezone.utc).isoformat()
     return prices
 
 
@@ -443,7 +481,7 @@ def generate_regional_comparison(df: pd.DataFrame) -> dict:
 
     if 'regional' not in df.columns:
         logger.warning("No regional column found - skipping regional comparison")
-        return {'comparisons': {}, 'generated_at': datetime.now().isoformat()}
+        return {'comparisons': {}, 'generated_at': datetime.now(timezone.utc).isoformat()}
 
     comparisons = {}
 
@@ -470,7 +508,7 @@ def generate_regional_comparison(df: pd.DataFrame) -> dict:
                 'most_expensive': max(regional_stats.items(), key=lambda x: x[1]['mean'])[0],
             }
 
-    return {'comparisons': comparisons, 'generated_at': datetime.now().isoformat()}
+    return {'comparisons': comparisons, 'generated_at': datetime.now(timezone.utc).isoformat()}
 
 
 def generate_regional_filters(df: pd.DataFrame) -> dict:
@@ -478,7 +516,7 @@ def generate_regional_filters(df: pd.DataFrame) -> dict:
     logger.info("Generating regional filters...")
 
     filters = {
-        'regionais': REGIONAIS_PADRAO,
+        'regionais': [],  # populated below from actual data
         'regionais_com_dados': [],
         'regional_products': {},
         'regional_categories': {},
@@ -490,6 +528,7 @@ def generate_regional_filters(df: pd.DataFrame) -> dict:
         return filters
 
     filters['regionais_com_dados'] = sorted(df['regional'].dropna().unique().tolist())
+    filters['regionais'] = filters['regionais_com_dados']  # derived from actual data
 
     # Products available in each regional
     for regional, grp in df.groupby('regional'):
@@ -506,7 +545,7 @@ def generate_regional_timeseries(df: pd.DataFrame) -> dict:
 
     if 'regional' not in df.columns:
         logger.warning("No regional column found - skipping regional timeseries")
-        return {'series': {}, 'generated_at': datetime.now().isoformat()}
+        return {'series': {}, 'generated_at': datetime.now(timezone.utc).isoformat()}
 
     series = {'by_regional': {}, 'by_period': {}}
 
@@ -527,7 +566,7 @@ def generate_regional_timeseries(df: pd.DataFrame) -> dict:
             period_data[regional] = round(float(rg['preco_medio'].mean()), 2)
         series['by_period'][periodo] = period_data
 
-    series['generated_at'] = datetime.now().isoformat()
+    series['generated_at'] = datetime.now(timezone.utc).isoformat()
     return series
 
 
@@ -537,7 +576,7 @@ def generate_detailed_regional_data(df: pd.DataFrame) -> dict:
 
     if 'regional' not in df.columns:
         logger.warning("No regional column found - skipping detailed regional data")
-        return {'records': [], 'generated_at': datetime.now().isoformat()}
+        return {'records': [], 'generated_at': datetime.now(timezone.utc).isoformat()}
 
     # Sampling strategy: keep ALL recent data (2025+), stratified sample for historical data
     MAX_RECORDS = 300000
@@ -598,7 +637,7 @@ def generate_detailed_regional_data(df: pd.DataFrame) -> dict:
             'produtos': sorted(df['produto'].dropna().unique().tolist())[:500],
             'regionais': sorted(df['regional'].dropna().unique().tolist()),
         },
-        'generated_at': datetime.now().isoformat(),
+        'generated_at': datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -608,7 +647,7 @@ def generate_regional_statistics(df: pd.DataFrame) -> dict:
 
     if 'regional' not in df.columns:
         logger.warning("No regional column found - skipping regional statistics")
-        return {'stats': {}, 'generated_at': datetime.now().isoformat()}
+        return {'stats': {}, 'generated_at': datetime.now(timezone.utc).isoformat()}
 
     stats = {}
 
@@ -630,7 +669,7 @@ def generate_regional_statistics(df: pd.DataFrame) -> dict:
             'categories': grp['categoria'].value_counts().to_dict(),
         }
 
-    return {'stats': stats, 'generated_at': datetime.now().isoformat()}
+    return {'stats': stats, 'generated_at': datetime.now(timezone.utc).isoformat()}
 
 
 def save_json(data: dict, filename: str):
@@ -641,49 +680,129 @@ def save_json(data: dict, filename: str):
     logger.info(f"Saved {filename} ({filepath.stat().st_size / 1024:.1f} KB)")
 
 
+_VALID_CATEGORIES = {
+    'Grãos', 'Café', 'Frutas', 'Hortaliças', 'Mandioca', 'Pecuária', 'Florestal',
+}
+
+_VALID_UNITS = {
+    'sc 60 Kg', 'sc 50 Kg', 'arroba', 'kg', 'kg renda', 'tonelada',
+    'unidade', 'caixa', 'duzia', 'litro', 'cabeça',
+}
+
+
+def _write_step_summary(msg: str) -> None:
+    import os
+    summary = os.environ.get('GITHUB_STEP_SUMMARY')
+    if summary:
+        try:
+            with open(summary, 'a', encoding='utf-8') as f:
+                f.write(f"\n> :warning: {msg}\n")
+        except Exception:
+            pass
+
+
+def _business_days_since(d) -> int:
+    """Approximate business days from date d to today (ignoring holidays)."""
+    from datetime import date as _date
+    today = _date.today()
+    if d >= today:
+        return 0
+    count = 0
+    current = d
+    while current < today:
+        current = current.__class__.fromordinal(current.toordinal() + 1)
+        if current.weekday() < 5:
+            count += 1
+    return count
+
+
+def _validate_df(df: pd.DataFrame, label: str = 'aggregated') -> None:
+    """Validate data quality; raises ValueError on hard failures, logs warnings on soft ones."""
+    from datetime import date as _date
+
+    # Hard check: uniqueness of business key
+    key_cols = ['data', 'produto', 'unidade']
+    if all(c in df.columns for c in key_cols):
+        dupes = df.duplicated(subset=key_cols, keep=False)
+        if dupes.any():
+            n = dupes.sum()
+            msg = f"[{label}] HARD ERROR: {n} duplicate rows on (data, produto, unidade)"
+            logger.error(msg)
+            raise ValueError(msg)
+
+    # Soft check: category domain
+    if 'categoria' in df.columns:
+        unknown_cats = set(df['categoria'].dropna().unique()) - _VALID_CATEGORIES
+        if unknown_cats:
+            # Warning, not error: a new legitimate value must not block the daily run
+            msg = f"[{label}] unknown categories (update the allowed domain if legitimate): {unknown_cats}"
+            logger.warning(msg)
+            _write_step_summary(msg)
+
+    # Soft check: unit domain
+    if 'unidade' in df.columns:
+        unknown_units = set(df['unidade'].dropna().unique()) - _VALID_UNITS
+        if unknown_units:
+            # Warning, not error: a new legitimate value must not block the daily run
+            msg = f"[{label}] unknown units (update the allowed domain if legitimate): {unknown_units}"
+            logger.warning(msg)
+            _write_step_summary(msg)
+
+    # Warning: staleness (>3 business days without new data)
+    if 'data' in df.columns:
+        try:
+            latest = pd.to_datetime(df['data']).max().date()
+            bd = _business_days_since(latest)
+            if bd > 3:
+                msg = f"[{label}] STALE DATA: latest record is {latest} ({bd} business days ago)"
+                logger.warning(msg)
+                _write_step_summary(msg)
+        except Exception:
+            pass
+
+
 def main():
     """Main preprocessing pipeline."""
     JSON_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Check for at least one input file
-    if not INPUT_FILE.exists() and not INPUT_FILE_REGIONAL.exists():
-        logger.error(f"No input files found: {INPUT_FILE} or {INPUT_FILE_REGIONAL}")
-        return
+    # Quarantine is rebuilt from scratch on every run (load_data appends to it)
+    QUARANTINE_FILE.unlink(missing_ok=True)
 
     # Load aggregated data
     df_agg = load_data(regional=False)
+    if df_agg.empty:
+        raise RuntimeError(f"No aggregated data found at {INPUT_FILE}")
 
-    if not df_agg.empty:
-        # Original JSON files (from aggregated data)
-        save_json(generate_aggregated_data(df_agg), 'aggregated.json')
-        save_json(generate_latest_prices(df_agg), 'latest.json')
-        # detailed.json continua sendo gerado, mas o dashboard so o baixa sob
-        # demanda (ao aplicar filtro), nao mais no carregamento inicial.
-        save_json(generate_detailed_data(df_agg), 'detailed.json')
-        save_json(generate_time_series(df_agg), 'timeseries.json')
-        save_json(generate_filter_maps(df_agg), 'filters.json')
+    _validate_df(df_agg, 'aggregated')
+    # Original JSON files (from aggregated data)
+    save_json(generate_aggregated_data(df_agg), 'aggregated.json')
+    save_json(generate_latest_prices(df_agg), 'latest.json')
+    # detailed.json continua sendo gerado, mas o dashboard so o baixa sob
+    # demanda (ao aplicar filtro), nao mais no carregamento inicial.
+    save_json(generate_detailed_data(df_agg), 'detailed.json')
+    save_json(generate_time_series(df_agg), 'timeseries.json')
+    save_json(generate_filter_maps(df_agg), 'filters.json')
 
-        # Analytics JSON files
-        save_json(generate_daily_series(df_agg), 'daily_series.json')
-        save_json(generate_volatility(df_agg), 'volatility.json')
-        save_json(generate_regional_spread(df_agg), 'regional_spread.json')
+    # Analytics JSON files
+    save_json(generate_daily_series(df_agg), 'daily_series.json')
+    save_json(generate_volatility(df_agg), 'volatility.json')
+    save_json(generate_regional_spread(df_agg), 'regional_spread.json')
 
-    # Load regional data if available
-    if INPUT_FILE_REGIONAL.exists():
-        df_regional = load_data(regional=True)
+    # Regional data: same cleaning/quarantine path as aggregated (load_data)
+    df_regional = load_data(regional=True)
 
-        if not df_regional.empty:
-            # Regional JSON files
-            save_json(generate_regional_prices(df_regional), 'regional_prices.json')
-            save_json(generate_regional_comparison(df_regional), 'regional_comparison.json')
-            save_json(generate_regional_filters(df_regional), 'regional_filters.json')
-            save_json(generate_regional_timeseries(df_regional), 'regional_timeseries.json')
-            save_json(generate_detailed_regional_data(df_regional), 'detailed_regional.json')
-            save_json(generate_regional_statistics(df_regional), 'regional_statistics.json')
+    if not df_regional.empty and 'regional' in df_regional.columns:
+        # Regional JSON files
+        save_json(generate_regional_prices(df_regional), 'regional_prices.json')
+        save_json(generate_regional_comparison(df_regional), 'regional_comparison.json')
+        save_json(generate_regional_filters(df_regional), 'regional_filters.json')
+        save_json(generate_regional_timeseries(df_regional), 'regional_timeseries.json')
+        save_json(generate_detailed_regional_data(df_regional), 'detailed_regional.json')
+        save_json(generate_regional_statistics(df_regional), 'regional_statistics.json')
 
-            logger.info(f"Generated regional JSONs with {len(df_regional)} records from {df_regional['regional'].nunique()} regions")
+        logger.info(f"Generated regional JSONs with {len(df_regional)} records from {df_regional['regional'].nunique()} regions")
     else:
-        logger.info("No regional data file found - skipping regional JSONs")
+        logger.info("No regional data found - skipping regional JSONs")
 
     logger.info("Preprocessing complete!")
 
