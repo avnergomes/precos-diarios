@@ -1,17 +1,16 @@
 services:
   # Backend API Service
+  # autoDeploy: true is intentional — each daily commit from the GitHub Actions
+  # data-update bot triggers a Render redeploy, which picks up the freshly
+  # committed JSON/CSV files without any ETL running inside the build.
   - type: web
     name: precos-diarios-api
     runtime: python
     region: oregon
     plan: free
     repo: https://github.com/avnergomes/precos-diarios
-    buildCommand: |
-      pip install -r requirements.txt
-      python -c "from api.scraper import scrape_latest_quotations; scrape_latest_quotations()" || true
-      python api/etl_regional.py || true
-      python api/preprocess_data.py || true
-    startCommand: gunicorn api.app_v2:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn api.app_v2:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120
     envVars:
       - key: FLASK_ENV
         value: production
@@ -22,6 +21,10 @@ services:
       - key: API_KEY_BASIC
         sync: false
       - key: API_KEY_PRO
+        sync: false
+      - key: APPS_SCRIPT_URL
+        sync: false
+      - key: APPS_SCRIPT_SECRET
         sync: false
     autoDeploy: true
     healthCheckPath: /

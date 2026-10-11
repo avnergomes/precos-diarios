@@ -3,7 +3,7 @@
 """
 Flask API v2 for SIMA Daily Quotations
 Enhanced with regional granularity and commercial endpoints.
-Version: 2.1.0 - Build 2026-02-26
+Version: 2.2.0 - Build 2026-10-11
 
 Endpoints:
   Public (Dashboard):
@@ -32,7 +32,6 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 from flask import Flask, jsonify, request, send_from_directory, g
 from flask_cors import CORS
-from apscheduler.schedulers.background import BackgroundScheduler
 import pandas as pd
 import requests as http_requests
 
@@ -55,22 +54,28 @@ DASHBOARD_DATA_DIR = BASE_DIR / "dashboard" / "public" / "data"
 FORECASTS_DIR = DASHBOARD_DATA_DIR / "forecasts"
 
 app = Flask(__name__)
-CORS(app)
 
-# Rate limiting storage (in production use Redis)
+# CORS: restrict to GitHub Pages and localhost dev.
+# Override by setting CORS_ORIGINS env var (comma-separated list).
+_cors_default = "https://avnergomes.github.io"
+_cors_origins = os.environ.get("CORS_ORIGINS", _cors_default).split(",")
+_cors_origins += ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:5500"]
+CORS(app, origins=[o.strip() for o in _cors_origins])
+
+# Rate limiting storage (in-process; works correctly with 1 worker + threads).
+# ponytail: in-memory per-process lock, switch to Redis if multi-worker is needed.
 rate_limit_storage = defaultdict(list)
 RATE_LIMIT_REQUESTS = 100  # requests per window
 RATE_LIMIT_WINDOW = 60  # seconds
 
 # API Keys (in production use database/secrets manager)
-# Format: {api_key: {name, tier, requests_per_minute}}
+# Format: {api_key: {name, tier, rpm}}
 # Fail-closed: sem a env var correspondente, o tier fica desabilitado.
-# (Antes havia fallbacks 'demo-key-*' hardcoded, utilizáveis em produção.)
 API_KEYS = {}
 for _env_name, _tier_info in (
-    ('API_KEY_FREE', {'name': 'Free', 'tier': 'free', 'rpm': 10, 'daily_limit': 100}),
-    ('API_KEY_BASIC', {'name': 'Basic', 'tier': 'basic', 'rpm': 60, 'daily_limit': 1000}),
-    ('API_KEY_PRO', {'name': 'Pro', 'tier': 'pro', 'rpm': 300, 'daily_limit': 10000}),
+    ('API_KEY_FREE', {'name': 'Free', 'tier': 'free', 'rpm': 10}),
+    ('API_KEY_BASIC', {'name': 'Basic', 'tier': 'basic', 'rpm': 60}),
+    ('API_KEY_PRO', {'name': 'Pro', 'tier': 'pro', 'rpm': 300}),
 ):
     _key_value = os.environ.get(_env_name)
     if _key_value:
@@ -78,11 +83,11 @@ for _env_name, _tier_info in (
     else:
         app.logger.warning('%s nao definida; tier %s desabilitado', _env_name, _tier_info['tier'])
 
-# Tier limits configuration for external keys
+# Tier limits for external keys loaded from Google Sheets
 TIER_LIMITS = {
-    'free': {'rpm': 10, 'daily': 100},
-    'basic': {'rpm': 60, 'daily': 1000},
-    'pro': {'rpm': 300, 'daily': 10000}
+    'free': {'rpm': 10},
+    'basic': {'rpm': 60},
+    'pro': {'rpm': 300}
 }
 
 # External keys cache (from Google Sheets)
@@ -110,11 +115,27 @@ def load_consolidated_data(regional: bool = True) -> pd.DataFrame:
         if cache_key in _data_cache:
             return _data_cache[cache_key]
 
-    # Select appropriate file
+    # Try new partitioned storage helper (api/storage.py, created by storage migration).
+    # Falls back to single-file read if the module or files are not present yet.
     if regional:
-        csv_path = PROCESSED_DIR / "consolidated_regional.csv"
-        if not csv_path.exists():
-            csv_path = PROCESSED_DIR / "consolidated.csv"  # Fallback
+        try:
+            from api.storage import load_regional as _load_regional  # noqa: PLC0415
+            df = _load_regional()
+            if df is not None and not df.empty:
+                df['data'] = pd.to_datetime(df['data'], errors='coerce')
+                if 'preco' not in df.columns and 'preco_medio' in df.columns:
+                    df['preco'] = pd.to_numeric(df['preco_medio'], errors='coerce')
+                elif 'preco' in df.columns:
+                    df['preco'] = pd.to_numeric(df['preco'], errors='coerce')
+                _data_cache[cache_key] = df
+                _cache_timestamp = now
+                return df
+        except Exception:
+            pass  # fall through to single-file path
+
+    # Single-file fallback (kept for legacy; partitioned files are preferred above)
+    if regional:
+        csv_path = PROCESSED_DIR / "consolidated.csv"
     else:
         csv_path = PROCESSED_DIR / "consolidated.csv"
 
@@ -150,9 +171,24 @@ def load_external_keys():
         return {}
 
     try:
-        response = http_requests.get(f"{url}?action=list&secret={secret}", timeout=10)
+        # Send secret in POST body (not URL) to avoid exposure in proxy/server access logs.
+        # The Apps Script doPost handler must read: JSON.parse(e.postData.contents).secret
+        # Example Apps Script snippet to add/update:
+        #   function doPost(e) {
+        #     var body = JSON.parse(e.postData.contents);
+        #     if (body.secret !== SCRIPT_SECRET) {
+        #       return ContentService.createTextOutput('{}').setMimeType(ContentService.MimeType.JSON);
+        #     }
+        #     var action = e.parameter.action;
+        #     if (action === 'list') { /* return keys as JSON */ }
+        #   }
+        response = http_requests.post(
+            f"{url}?action=list",
+            json={"secret": secret},
+            timeout=10
+        )
         if response.status_code != 200:
-            logger.warning(f"Apps Script returned status {response.status_code}")
+            logger.warning("Apps Script returned status %s", response.status_code)
             return {}
 
         data = response.json()
@@ -164,12 +200,11 @@ def load_external_keys():
                 'name': k.get('name', 'Unknown'),
                 'tier': tier,
                 'rpm': limits['rpm'],
-                'daily_limit': limits['daily']
             }
-        logger.info(f"Loaded {len(keys)} external API keys from Google Sheets")
+        logger.info("Loaded %d external API keys from Google Sheets", len(keys))
         return keys
     except Exception as e:
-        logger.error(f"Error loading external keys: {e}")
+        logger.error("Error loading external keys: %s", e)
         return {}
 
 
@@ -192,12 +227,18 @@ def require_api_key(f):
     """Decorator to require API key for commercial endpoints."""
     @functools.wraps(f)
     def decorated(*args, **kwargs):
-        api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+        api_key = request.headers.get('X-API-Key')
 
         if not api_key:
+            if request.args.get('api_key'):
+                # Reject query-string keys: they appear in server access logs and URLs.
+                return jsonify({
+                    'error': 'API key in query string not accepted',
+                    'message': 'Send the API key via the X-API-Key request header instead'
+                }), 400
             return jsonify({
                 'error': 'API key required',
-                'message': 'Provide API key via X-API-Key header or api_key query param'
+                'message': 'Provide API key via X-API-Key header'
             }), 401
 
         all_keys = get_all_api_keys()
@@ -212,7 +253,7 @@ def require_api_key(f):
         g.api_key = api_key
         g.api_info = all_keys[api_key]
 
-        # Rate limiting
+        # Rate limiting (per-process in-memory; accurate with 1 worker).
         key_requests = rate_limit_storage[api_key]
         now = time.time()
         window_start = now - 60
@@ -253,8 +294,8 @@ def index():
     return jsonify({
         'status': 'ok',
         'service': 'SIMA Daily Quotations API',
-        'version': '2.1.0',
-        'build': '2026-02-26',
+        'version': '2.2.0',
+        'build': '2026-10-11',
         'timestamp': datetime.now().isoformat(),
         'documentation': {
             'public_endpoints': {
@@ -264,7 +305,7 @@ def index():
             },
             'commercial_endpoints': {
                 'base_url': '/api/v1/',
-                'authentication': 'X-API-Key header or api_key query param',
+                'authentication': 'X-API-Key header (query string not accepted)',
                 'endpoints': {
                     'products': 'GET /api/v1/products',
                     'regions': 'GET /api/v1/regions',
@@ -277,9 +318,9 @@ def index():
                 }
             },
             'rate_limits': {
-                'free': '10 requests/minute, 100/day',
-                'basic': '60 requests/minute, 1000/day',
-                'pro': '300 requests/minute, 10000/day'
+                'free': '10 requests/minute',
+                'basic': '60 requests/minute',
+                'pro': '300 requests/minute'
             }
         }
     })
@@ -311,7 +352,8 @@ def status():
     # Check JSON files
     json_files = [
         'aggregated.json', 'timeseries.json', 'filters.json', 'detailed.json',
-        'daily_series.json', 'regional_prices.json', 'regional_statistics.json'
+        'daily_series.json', 'regional_prices.json', 'regional_statistics.json',
+        'latest.json'
     ]
     for filename in json_files:
         filepath = JSON_DIR / filename
@@ -326,15 +368,21 @@ def status():
             files_info[filename] = {'exists': False}
 
     # Check CSV files
-    for csv_name in ['consolidated.csv', 'consolidated_regional.csv']:
-        csv_path = PROCESSED_DIR / csv_name
-        if csv_path.exists():
-            stat = csv_path.stat()
-            files_info[csv_name] = {
-                'exists': True,
-                'size_kb': round(stat.st_size / 1024, 1),
-                'modified': datetime.fromtimestamp(stat.st_mtime).isoformat()
-            }
+    csv_path = PROCESSED_DIR / 'consolidated.csv'
+    if csv_path.exists():
+        stat = csv_path.stat()
+        files_info['consolidated.csv'] = {
+            'exists': True,
+            'size_kb': round(stat.st_size / 1024, 1),
+            'modified': datetime.fromtimestamp(stat.st_mtime).isoformat()
+        }
+    # Check partitioned regional directory instead of single file
+    regional_dir = PROCESSED_DIR / 'regional'
+    regional_files = list(regional_dir.glob('consolidated_regional_*.csv')) if regional_dir.exists() else []
+    files_info['regional_partitions'] = {
+        'exists': len(regional_files) > 0,
+        'count': len(regional_files),
+    }
 
     # Data summary
     df = load_consolidated_data()
@@ -368,7 +416,9 @@ def get_data(filename):
         # Regional data
         'regional_prices.json', 'regional_comparison.json', 'regional_filters.json',
         'regional_timeseries.json', 'detailed_regional.json', 'regional_statistics.json',
-        # Legacy
+        # Latest snapshot
+        'latest.json',
+        # Legacy / forecast catalog
         'regional_data.json', 'forecast_products.json'
     ]
 
@@ -419,7 +469,11 @@ def get_products():
 
     category = request.args.get('category')
     search = request.args.get('search', '').lower()
-    limit = min(int(request.args.get('limit', 100)), 500)
+
+    try:
+        limit = min(int(request.args.get('limit', 100)), 500)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid parameter', 'message': 'limit must be an integer'}), 400
 
     products_df = df.groupby('produto').agg({
         'categoria': 'first',
@@ -436,7 +490,8 @@ def get_products():
         products_df = products_df[products_df['categoria'].str.lower() == category.lower()]
 
     if search:
-        products_df = products_df[products_df['produto'].str.lower().str.contains(search)]
+        # regex=False prevents ReDoS on user-supplied input
+        products_df = products_df[products_df['produto'].str.lower().str.contains(search, regex=False)]
 
     products = []
     for _, row in products_df.head(limit).iterrows():
@@ -542,7 +597,7 @@ def get_prices():
         start_date: Start date (YYYY-MM-DD)
         end_date: End date (YYYY-MM-DD)
         limit: Max results (default 1000, max 10000)
-        offset: Pagination offset
+        offset: Pagination offset (>= 0)
         format: 'full' or 'compact' (default compact)
     """
     df = load_consolidated_data()
@@ -554,9 +609,17 @@ def get_prices():
     category = request.args.get('category')
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
-    limit = min(int(request.args.get('limit', 1000)), 10000)
-    offset = int(request.args.get('offset', 0))
     format_type = request.args.get('format', 'compact')
+
+    try:
+        limit = min(int(request.args.get('limit', 1000)), 10000)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid parameter', 'message': 'limit must be an integer'}), 400
+
+    try:
+        offset = max(0, int(request.args.get('offset', 0)))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid parameter', 'message': 'offset must be an integer >= 0'}), 400
 
     # Apply filters
     filtered = df.copy()
@@ -571,10 +634,16 @@ def get_prices():
         filtered = filtered[filtered['categoria'].str.lower() == category.lower()]
 
     if start_date:
-        filtered = filtered[filtered['data'] >= pd.to_datetime(start_date)]
+        try:
+            filtered = filtered[filtered['data'] >= pd.to_datetime(start_date)]
+        except Exception:
+            return jsonify({'error': 'Invalid parameter', 'message': 'start_date must be YYYY-MM-DD'}), 400
 
     if end_date:
-        filtered = filtered[filtered['data'] <= pd.to_datetime(end_date)]
+        try:
+            filtered = filtered[filtered['data'] <= pd.to_datetime(end_date)]
+        except Exception:
+            return jsonify({'error': 'Invalid parameter', 'message': 'end_date must be YYYY-MM-DD'}), 400
 
     total = len(filtered)
     filtered = filtered.sort_values('data', ascending=False).iloc[offset:offset + limit]
@@ -623,7 +692,7 @@ def get_latest_prices():
         product: Filter by product
         region: Filter by region
         category: Filter by category
-        days: Number of days back to consider (default 7)
+        days: Number of days back to consider (default 7, max 365)
     """
     df = load_consolidated_data()
     if df.empty:
@@ -632,7 +701,11 @@ def get_latest_prices():
     product = request.args.get('product')
     region = request.args.get('region')
     category = request.args.get('category')
-    days = int(request.args.get('days', 7))
+
+    try:
+        days = max(1, min(365, int(request.args.get('days', 7))))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid parameter', 'message': 'days must be an integer 1-365'}), 400
 
     # Filter by date
     cutoff = df['data'].max() - timedelta(days=days)
@@ -686,8 +759,8 @@ def get_timeseries():
     Query params:
         product: Product name (required)
         region: Regional nucleus (optional)
-        start_date: Start date
-        end_date: End date
+        start_date: Start date (YYYY-MM-DD)
+        end_date: End date (YYYY-MM-DD)
         aggregation: 'daily', 'weekly', 'monthly' (default daily)
     """
     df = load_consolidated_data()
@@ -717,10 +790,16 @@ def get_timeseries():
         filtered = filtered[filtered['regional'].str.lower() == region.lower()]
 
     if start_date:
-        filtered = filtered[filtered['data'] >= pd.to_datetime(start_date)]
+        try:
+            filtered = filtered[filtered['data'] >= pd.to_datetime(start_date)]
+        except Exception:
+            return jsonify({'error': 'Invalid parameter', 'message': 'start_date must be YYYY-MM-DD'}), 400
 
     if end_date:
-        filtered = filtered[filtered['data'] <= pd.to_datetime(end_date)]
+        try:
+            filtered = filtered[filtered['data'] <= pd.to_datetime(end_date)]
+        except Exception:
+            return jsonify({'error': 'Invalid parameter', 'message': 'end_date must be YYYY-MM-DD'}), 400
 
     # Aggregate
     if aggregation == 'weekly':
@@ -865,71 +944,25 @@ def get_forecast_v1(produto):
         result = generate_forecast(produto, horizonte)
         return jsonify(result)
     except Exception as e:
-        logger.error(f"Forecast error for {produto}: {e}")
+        logger.error("Forecast error for %s: %s", produto, e)
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Forecast generation failed'
         }), 500
 
 
 # ====================
-# SCHEDULING & INIT
+# INIT
 # ====================
 
-def run_pipeline():
-    """Run the complete ETL pipeline."""
-    logger.info("Starting ETL pipeline...")
-
-    try:
-        from scraper import scrape_latest_quotations
-        scrape_latest_quotations()
-    except Exception as e:
-        logger.error(f"Scraping error: {e}")
-
-    try:
-        from etl_regional import process_all_files
-        process_all_files()
-    except Exception as e:
-        logger.error(f"ETL error: {e}")
-
-    try:
-        from preprocess_data import main as preprocess_main
-        preprocess_main()
-    except Exception as e:
-        logger.error(f"Preprocessing error: {e}")
-
-    # Clear cache
+def clear_data_cache():
+    """Clear the in-memory data cache (e.g. after a manual data refresh)."""
     global _data_cache, _cache_timestamp
     _data_cache = {}
     _cache_timestamp = None
-
-    logger.info("Pipeline completed")
-
-
-def init_scheduler():
-    """Initialize the background scheduler."""
-    scheduler = BackgroundScheduler()
-
-    scheduler.add_job(
-        run_pipeline,
-        'cron',
-        hour=13,
-        minute=0,
-        timezone='America/Sao_Paulo',
-        id='daily_pipeline'
-    )
-
-    scheduler.start()
-    logger.info("Scheduler started - pipeline at 13:00 BRT")
+    logger.info("Data cache cleared")
 
 
 if __name__ == '__main__':
-    if os.environ.get('FLASK_ENV') == 'production':
-        init_scheduler()
-
-    if not (JSON_DIR / 'aggregated.json').exists():
-        logger.info("No data found, running initial pipeline...")
-        run_pipeline()
-
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
