@@ -10,6 +10,7 @@ const MODEL_META = {
   random_forest: { color: '#E69F00', bg: 'bg-amber-100',   text: 'text-amber-700',   label: 'Random Forest' },
   xgboost:       { color: '#D55E00', bg: 'bg-orange-100',  text: 'text-orange-800',  label: 'XGBoost' },
   prophet:       { color: '#56B4E9', bg: 'bg-sky-100',     text: 'text-sky-600',     label: 'Prophet' },
+  baseline_naive: { color: '#9CA3AF', bg: 'bg-gray-100', text: 'text-gray-600', label: 'Baseline sazonal ingênuo' },
 }
 
 function getMeta(key) {
@@ -20,7 +21,6 @@ function formatSubtitle(key, model) {
   const parts = []
   if (model.ordem) parts.push(`Ordem: (${model.ordem.join(', ')})`)
   if (model.ordem_sazonal) parts.push(`Sazonal: (${model.ordem_sazonal.join(', ')})`)
-  if (model.r_squared != null) parts.push(`R²: ${model.r_squared.toFixed(4)}`)
   if (key === 'prophet') parts.push('Meta/Facebook')
   if (key === 'random_forest') parts.push('Ensemble')
   if (key === 'xgboost') parts.push('Gradient Boosting')
@@ -62,7 +62,7 @@ export default function ForecastKpis({ modelos = {}, historico = [], horizon = 3
 
             {/* Forecast value + variation */}
             <div className="mb-4">
-              <p className="text-xs text-dark-500 mb-1">Previsão {horizon}d</p>
+              <p className="text-xs text-dark-500 mb-1">Previsão {horizon === 1 ? '1 mês' : `${horizon} meses`}</p>
               <p className="text-xl font-bold" style={{ color: meta.color }}>
                 {formatCurrency(forecast)}
               </p>

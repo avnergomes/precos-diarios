@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
+    <meta charset="UTF-8" />
+    <!-- spa-github-pages decoder (rafgraph): reconstrói URL de ?/path gerado pelo 404.html -->
+    <script>
+      (function(l) {
+        if (l.search[1] === '/') {
+          var decoded = l.search.slice(1).split('&').map(function(s) {
+            return s.replace(/~and~/g, '&');
+          }).join('?');
+          window.history.replaceState(null, null, l.pathname.slice(0, -1) + decoded + l.hash);
+        }
+      }(window.location));
+    </script>
     <!-- Datageo Hub Banner — convite não bloqueante ao hub.
          Substitui o antigo "referer gate", que expulsava acessos diretos
          (favoritos, links compartilhados e visitantes vindos de buscadores)
@@ -66,7 +78,6 @@
       })();
     </script>
 
-    <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Cotações diárias de produtos agropecuários no Paraná — últimos preços, evolução histórica, sazonalidade e previsão. Dashboard de BI para cooperativas, cerealistas e agronegócio. Dados SIMA/DERAL." />
@@ -214,27 +225,16 @@
 
           var utmParams = getUTMParams();
 
-          // Campos anonimizados - sem IP, cookies ou fingerprint (Art. 12 LGPD)
+          // Campos mínimos - apenas pathname e host do referrer (LGPD)
+          var referrerHost = '';
+          try { referrerHost = document.referrer ? new URL(document.referrer).hostname : ''; } catch(e) {}
           var data = {
-            origin: window.location.origin,
             timestamp: new Date().toISOString(),
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            timezoneOffset: new Date().getTimezoneOffset(),
-            page: window.location.href,
             pathname: window.location.pathname,
-            referrer: document.referrer || '',
-            pageTitle: document.title,
-            language: navigator.language,
-            deviceType: getDeviceType(),
-            screenOrientation: screen.orientation ? screen.orientation.type : 'unknown',
-            connectionType: getConnectionType(),
-            loadTime: loadTime > 0 ? loadTime : '',
+            referrerHost: referrerHost,
             utmSource: utmParams.utmSource,
             utmMedium: utmParams.utmMedium,
-            utmCampaign: utmParams.utmCampaign,
-            utmTerm: utmParams.utmTerm,
-            utmContent: utmParams.utmContent,
-            prefersColorScheme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+            utmCampaign: utmParams.utmCampaign
           };
 
           fetch(TRACKING_URL, {
@@ -242,8 +242,6 @@
             mode: 'no-cors',
             headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify(data)
-          }).then(function() {
-            console.log('[Tracking] Data sent (anonymous)');
           }).catch(function(err) {
             console.warn('[Tracking] Error:', err);
           });
@@ -266,22 +264,19 @@
     <div id="lgpd-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:950;background:#14110c;color:#e3d6b6;border-top:1px solid #a8482c;padding:14px clamp(20px,4vw,40px);font-family:'IBM Plex Sans',system-ui,sans-serif;">
       <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;">
         <p style="margin:0;flex:1;min-width:280px;font-family:'Fraunces','Cormorant Garamond',Georgia,serif;font-size:0.95rem;line-height:1.5;color:#e3d6b6;">
-          Este site utiliza apenas dados públicos agregados. Nenhum dado pessoal é coletado ou armazenado.
-          Em conformidade com a <strong style="color:#f1e9d6;">LGPD (Lei 13.709/2018)</strong>, todos os indicadores são baseados em
-          estatísticas oficiais sem identificação individual.
+          Este painel exibe apenas dados públicos agregados do SEAB/DERAL. O cadastro de chave de API é voluntário;
+          os dados fornecidos (nome e e-mail) são usados exclusivamente para o envio da chave, em conformidade com a
+          <strong style="color:#f1e9d6;">LGPD (Lei 13.709/2018)</strong>, e não são compartilhados com terceiros.
         </p>
         <button type="button"
-          onclick="document.getElementById('lgpd-banner').style.display='none';localStorage.setItem('lgpd-accepted','true')"
+          onclick="document.getElementById('lgpd-banner').style.display='none';try{localStorage.setItem('lgpd-accepted','true')}catch(e){}"
           style="flex-shrink:0;padding:10px 18px;min-height:44px;border:1px solid #f1e9d6;background:transparent;color:#f1e9d6;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:0.72rem;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;cursor:pointer;">
           Entendi
         </button>
       </div>
     </div>
     <script>
-      if (!localStorage.getItem('lgpd-accepted')) {
-        var b = document.getElementById('lgpd-banner');
-        if (b) b.style.display = 'block';
-      }
+      try { if (!localStorage.getItem('lgpd-accepted')) { var b = document.getElementById('lgpd-banner'); if (b) b.style.display = 'block'; } } catch(e) { var b = document.getElementById('lgpd-banner'); if (b) b.style.display = 'block'; }
     </script>
 </body>
 </html>

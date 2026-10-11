@@ -1,6 +1,6 @@
-# Preços Diários Paraná — Cotações desde 2003
+# Preços Diários Paraná — Cotações desde 2001
 
-> Preços Diários is a public interactive dashboard of daily commodity price quotes in Paraná markets since 2003, built from SEAB/DERAL open data. Part of the DataGeo Paraná ecosystem.
+> Preços Diários is a public interactive dashboard of daily commodity price quotes in Paraná markets since 2001, built from SEAB/DERAL open data. Part of the DataGeo Paraná ecosystem.
 
 ## Author and identity
 - Author: Avner Paes Gomes (Senior Data Scientist & Forest Engineer, Curitiba, Brazil)
@@ -12,7 +12,7 @@
 ## About this dashboard
 - Topic: Daily commodity price quotes for Paraná markets
 - Data source: SEAB/DERAL (Secretaria de Estado da Agricultura e do Abastecimento — Departamento de Economia Rural)
-- Coverage: Daily quotes since 2003, multiple agricultural commodities, Paraná state markets
+- Coverage: Daily quotes since 2001, multiple agricultural commodities, Paraná state markets
 - Stack: React, Vite, D3.js, Recharts, Python ETL, GitHub Actions
 - Free public access. Part of the DataGeo Paraná ecosystem, a personal public project with no institutional affiliation.
 - Parent hub: https://datageoparana.github.io/ (lists all 10 dashboards)

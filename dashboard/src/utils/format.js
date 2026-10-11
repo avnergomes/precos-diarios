@@ -170,9 +170,16 @@ export function formatCategoryName(category) {
  */
 export function formatDateTime(dateStr) {
   if (!dateStr) return ''
-  const raw = typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
-    ? dateStr + 'T12:00:00'
-    : dateStr
+  let raw = dateStr
+  if (typeof dateStr === 'string') {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      // Date-only: treat as noon Brasilia time to avoid day-boundary flip
+      raw = dateStr + 'T12:00:00-03:00'
+    } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(dateStr) && !/[Z+-]\d{2}:?\d{2}$/.test(dateStr)) {
+      // ISO datetime without timezone offset: assume UTC
+      raw = dateStr + 'Z'
+    }
+  }
   const date = new Date(raw)
   if (Number.isNaN(date.getTime())) return ''
 
@@ -182,6 +189,7 @@ export function formatDateTime(dateStr) {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'America/Sao_Paulo',
   })
 }
 

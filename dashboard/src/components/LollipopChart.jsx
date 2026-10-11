@@ -104,7 +104,7 @@ export default function LollipopChart({
           ))}
 
           {/* Lollipops */}
-          {items.map((item, i) => {
+          {items.map((item) => {
             const y = yScale(item.name) + yScale.bandwidth() / 2
             const xEnd = xScale(item.value)
             const color = getCategoryColor(item.category)

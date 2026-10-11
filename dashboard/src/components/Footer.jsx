@@ -127,7 +127,7 @@ export default function Footer({ metadata }) {
               title="Portfolio"
             >
               <img
-                src={`${import.meta.env.BASE_URL}assets/logo.png`}
+                src={`${import.meta.env.BASE_URL}assets/logo-small.webp`}
                 alt="Avner Gomes"
                 className="w-8 h-8 rounded-full opacity-80 group-hover:opacity-100 transition-opacity"
               />

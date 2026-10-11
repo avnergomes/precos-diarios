@@ -130,7 +130,7 @@ export default function RidgelineChart({
         style={{ overflow: 'visible' }}
       >
         <defs>
-          {densities.map((yearData, i) => (
+          {densities.map((yearData) => (
             <linearGradient
               key={`gradient-${yearData.year}`}
               id={`ridge-gradient-${yearData.year}`}
@@ -186,7 +186,7 @@ export default function RidgelineChart({
           ))}
 
           {/* Ridge lines */}
-          {densities.map((yearData, i) => {
+          {densities.map((yearData) => {
             const yOffset = yScale(yearData.year) + yScale.bandwidth()
             const color = YEAR_COLORS[yearData.colorIdx]
 

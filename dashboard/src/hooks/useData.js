@@ -23,7 +23,7 @@ export function useData() {
         setError(null)
 
         // Carga inicial: só arquivos agregados, ~50 KB no total.
-        // detailed.json (4,5 MB) saiu daqui e virou loadDetail(), sob demanda,
+        // detailed.json (~7 MB) saiu daqui e virou loadDetail(), sob demanda,
         // porque travava o first paint e a interatividade sem necessidade: a
         // visão sem filtro é inteiramente servida por aggregated/timeseries.
         const [aggregated, latest, timeseries, filters] = await Promise.all([
@@ -80,7 +80,7 @@ export function useData() {
     return () => controller.abort()
   }, [])
 
-  // Carrega detailed.json (~4,5 MB) só quando o usuário aplica um filtro, que
+  // Carrega detailed.json (~7 MB) só quando o usuário aplica um filtro, que
   // é quando a granularidade por registro passa a ser necessária. Sem filtro,
   // a tela inteira sai de aggregated.json + timeseries.json + latest.json.
   const loadDetail = useCallback(() => {
@@ -246,9 +246,8 @@ export function useFilteredData(data, filters) {
  * Monta as mesmas estruturas de `useAggregations` a partir de aggregated.json,
  * sem precisar dos registros crus. Usado na visão sem filtro.
  *
- * Além de dispensar o download de 4,5 MB, isto é mais correto do que o caminho
- * antigo: detailed.json é uma amostra de 50 mil registros, então os números de
- * destaque saíam da amostra. Aqui vêm do conjunto completo (77 mil).
+ * Além de dispensar o download de ~7 MB, isto é mais correto do que o caminho
+ * antigo: os números de destaque agora vêm do conjunto completo de registros.
  */
 export function aggregationsFromSummary(aggregated) {
   const byYear = aggregated?.by_year || {}
@@ -336,12 +335,12 @@ export function aggregationsFromSummary(aggregated) {
   }
 }
 
-export function useAggregations(filteredData, data) {
+export function useAggregations(filteredData, data, isFiltered = false) {
   return useMemo(() => {
     // Sem registros carregados, serve a visão a partir dos agregados em vez de
-    // devolver zeros. Isto é o que permite a tela renderizar completa sem os
-    // 4,5 MB de detailed.json.
-    if ((!filteredData || filteredData.length === 0) && data?.aggregated && !data?.detailed) {
+    // devolver zeros. Só faz sentido quando NÃO há filtros ativos; com filtros,
+    // os agregados refletem o estado inteiro e seria enganoso exibi-los.
+    if ((!filteredData || filteredData.length === 0) && data?.aggregated && !data?.detailed && !isFiltered) {
       return aggregationsFromSummary(data.aggregated)
     }
 
@@ -562,7 +561,7 @@ export function useAggregations(filteredData, data) {
       byRegional,
       sparklineData,
     }
-  }, [filteredData, data])
+  }, [filteredData, data, isFiltered])
 }
 
 function getRecordMonth(record) {

@@ -15,11 +15,28 @@ import {
   Legend,
 } from 'recharts'
 import {
-  formatCurrency,
   formatCategoryName,
   getCategoryColor,
   getChartColor,
 } from '../utils/format'
+
+function CategoryChartTooltip({ active, payload }) {
+  if (!active || !payload || !payload.length) return null
+  const data = payload[0].payload
+  return (
+    <div className="bg-white/95 backdrop-blur-sm border border-dark-200 rounded-lg shadow-lg p-3">
+      <p className="font-semibold text-dark-800 mb-2">{data.name}</p>
+      <p className="text-sm text-dark-600">
+        Registros: {data.registros.toLocaleString('pt-BR')}
+      </p>
+      {data.produtos && (
+        <p className="text-sm text-dark-600">
+          Produtos: {data.produtos}
+        </p>
+      )}
+    </div>
+  )
+}
 
 export default function CategoryChart({
   data,
@@ -27,7 +44,9 @@ export default function CategoryChart({
   description,
   height = 300,
   showPie = false,
-  xAxisLabel = 'Preço médio (R$)',
+  xAxisLabel = 'Registros',
+  // Contagens apenas: preço médio por categoria mistura unidades (arroba, sc, kg)
+  metric = 'registros',
   onCategoriaClick,
   selectedCategoria,
 }) {
@@ -59,29 +78,7 @@ export default function CategoryChart({
     }))
     .sort((a, b) => b.registros - a.registros)
 
-  const CustomTooltip = ({ active, payload }) => {
-    if (!active || !payload || !payload.length) return null
-
-    const data = payload[0].payload
-    return (
-      <div className="bg-white/95 backdrop-blur-sm border border-dark-200 rounded-lg shadow-lg p-3">
-        <p className="font-semibold text-dark-800 mb-2">{data.name}</p>
-        <p className="text-sm text-dark-600">
-          Preço médio: {formatCurrency(data.media)}
-        </p>
-        <p className="text-sm text-dark-600">
-          Registros: {data.registros.toLocaleString('pt-BR')}
-        </p>
-        {data.produtos && (
-          <p className="text-sm text-dark-600">
-            Produtos: {data.produtos}
-          </p>
-        )}
-      </div>
-    )
-  }
-
-  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
+  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
     if (percent < 0.05) return null
     const RADIAN = Math.PI / 180
     const radius = innerRadius + (outerRadius - innerRadius) * 0.5
@@ -141,6 +138,7 @@ export default function CategoryChart({
         </p>
       )}
 
+      <div role="img" aria-label={`Gráfico de categorias: ${title || 'distribuição'}`}>
       <ResponsiveContainer width="100%" height={height}>
         {viewMode === 'pie' ? (
           <PieChart>
@@ -164,7 +162,7 @@ export default function CategoryChart({
                 />
               ))}
             </Pie>
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<CategoryChartTooltip />} />
             <Legend
               layout="vertical"
               align="right"
@@ -184,7 +182,7 @@ export default function CategoryChart({
               tick={{ fontSize: 11, fill: '#6e6453' }}
               tickLine={false}
               axisLine={{ stroke: '#e2e8f0' }}
-              tickFormatter={(value) => formatCurrency(value)}
+              tickFormatter={(value) => value.toLocaleString('pt-BR')}
             >
               <Label
                 value={xAxisLabel}
@@ -201,9 +199,9 @@ export default function CategoryChart({
               axisLine={false}
               width={75}
             />
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<CategoryChartTooltip />} />
             <Bar
-              dataKey="media"
+              dataKey={metric}
               radius={[0, 4, 4, 0]}
               onClick={(data) => onCategoriaClick?.(data.rawName)}
               cursor={onCategoriaClick ? 'pointer' : 'default'}
@@ -219,6 +217,7 @@ export default function CategoryChart({
           </BarChart>
         )}
       </ResponsiveContainer>
+      </div>
 
       {onCategoriaClick && (
         <p className="text-xs text-center text-dark-400 mt-2">

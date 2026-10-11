@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { X, Key, Copy, Check, ExternalLink, AlertCircle } from 'lucide-react'
+import { X, Key, Copy, Check, AlertCircle } from 'lucide-react'
 
-const API_BASE_URL = 'https://precos-diarios-api.onrender.com'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://precos-diarios-api.onrender.com'
 
 export default function ApiModal({ isOpen, onClose, appsScriptUrl }) {
   const [formData, setFormData] = useState({ nome: '', email: '', uso: '' })
@@ -55,7 +55,7 @@ export default function ApiModal({ isOpen, onClose, appsScriptUrl }) {
     setLoading(true)
 
     try {
-      const response = await fetch(appsScriptUrl, {
+      await fetch(appsScriptUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: {
@@ -71,7 +71,7 @@ export default function ApiModal({ isOpen, onClose, appsScriptUrl }) {
         message: 'Solicitação registrada. Se a chave não chegar no seu email em até 24h, tente novamente ou contate o mantenedor.',
         tier: 'free'
       })
-    } catch (err) {
+    } catch {
       setError('Erro ao enviar cadastro. Tente novamente.')
     } finally {
       setLoading(false)
@@ -205,6 +205,10 @@ export default function ApiModal({ isOpen, onClose, appsScriptUrl }) {
                       />
                     </div>
 
+                    <div className="p-3 bg-dark-50 border border-dark-200 rounded-lg text-xs text-dark-500">
+                      <strong>Aviso de privacidade (LGPD):</strong> Nome e e-mail são usados exclusivamente para envio da chave de API e eventual comunicação sobre o serviço. Não são compartilhados com terceiros.
+                    </div>
+
                     {error && (
                       <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
                         <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -301,7 +305,7 @@ export default function ApiModal({ isOpen, onClose, appsScriptUrl }) {
                     <EndpointItem
                       method="GET"
                       path="/regions"
-                      description="Lista nucleos regionais IDR-PR"
+                      description="Núcleos regionais SEAB/DERAL"
                     />
                     <EndpointItem
                       method="GET"

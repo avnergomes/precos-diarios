@@ -1,5 +1,12 @@
 import { useState, useMemo } from 'react'
 import { Search, ChevronUp, ChevronDown, Download, Trophy, TrendingUp, TrendingDown } from 'lucide-react'
+
+function ProductTableSortIcon({ column, sortBy, sortOrder }) {
+  if (sortBy !== column) return null
+  return sortOrder === 'asc'
+    ? <ChevronUp className="w-4 h-4" />
+    : <ChevronDown className="w-4 h-4" />
+}
 import {
   formatCurrencyWithUnit,
   formatNumber,
@@ -44,7 +51,7 @@ export default function ProductTable({
       minimo: stats.minimo || 0,
       maximo: stats.maximo || 0,
       registros: stats.registros || 0,
-      variacao: stats.variacao || null,
+      variacao: stats.variacao ?? null,
       rank: index + 1,
     }))
   }, [data])
@@ -85,13 +92,6 @@ export default function ProductTable({
       setSortBy(column)
       setSortOrder('desc')
     }
-  }
-
-  const SortIcon = ({ column }) => {
-    if (sortBy !== column) return null
-    return sortOrder === 'asc'
-      ? <ChevronUp className="w-4 h-4" />
-      : <ChevronDown className="w-4 h-4" />
   }
 
   const getRankBadge = (rank) => {
@@ -219,7 +219,7 @@ export default function ProductTable({
               >
                 <span className="flex items-center justify-end gap-1">
                   Preço médio (R$ / unid.)
-                  <SortIcon column="media" />
+                  <ProductTableSortIcon column="media" sortBy={sortBy} sortOrder={sortOrder} />
                 </span>
               </th>
               <th
@@ -228,7 +228,7 @@ export default function ProductTable({
               >
                 <span className="flex items-center justify-end gap-1">
                   Variação %
-                  <SortIcon column="variacao" />
+                  <ProductTableSortIcon column="variacao" sortBy={sortBy} sortOrder={sortOrder} />
                 </span>
               </th>
               {showSparkline && (
@@ -240,7 +240,7 @@ export default function ProductTable({
               >
                 <span className="flex items-center justify-end gap-1">
                   Registros
-                  <SortIcon column="registros" />
+                  <ProductTableSortIcon column="registros" sortBy={sortBy} sortOrder={sortOrder} />
                 </span>
               </th>
             </tr>

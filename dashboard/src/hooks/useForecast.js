@@ -1,13 +1,15 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { fetchData } from '../lib/apiData'
 
 /**
  * Hook to load pre-computed forecast for a product (static JSON).
+ * horizonte is in months (default 3).
  */
-export function useForecast(produto, horizonte = 30) {
+export function useForecast(produto, horizonte = 3) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const abortRef = useRef(null)
 
   const fetchForecast = useCallback(async () => {
     if (!produto) {
@@ -15,19 +17,27 @@ export function useForecast(produto, horizonte = 30) {
       return
     }
 
+    // Cancel any in-flight request before starting a new one
+    if (abortRef.current) abortRef.current.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    const { signal } = controller
+
     setLoading(true)
     setError(null)
 
     try {
       const slug = produto.slug || produto
-      const result = await fetchData(`forecasts/${encodeURIComponent(slug)}.json`)
+      const result = await fetchData(`forecasts/${encodeURIComponent(slug)}.json`, { signal })
+
+      if (signal.aborted) return
 
       if (!result.success) {
         throw new Error(result.error || 'Falha ao carregar previsão')
       }
 
-      // Trim forecasts to match selected horizon (months)
-      const months = Math.max(1, Math.round(horizonte / 30))
+      // Trim forecasts to the selected horizon (already in months)
+      const months = Math.max(1, horizonte)
       const trimmed = { ...result }
       trimmed.modelos = {}
       for (const [key, model] of Object.entries(result.modelos || {})) {
@@ -39,11 +49,11 @@ export function useForecast(produto, horizonte = 30) {
 
       setData(trimmed)
     } catch (err) {
-      console.error('Forecast error:', err)
+      if (err.name === 'AbortError') return
       setError(err.message)
       setData(null)
     } finally {
-      setLoading(false)
+      if (!signal.aborted) setLoading(false)
     }
   }, [produto, horizonte])
 
@@ -76,7 +86,6 @@ export function useForecastProducts() {
         }
       } catch (err) {
         if (err.name !== 'AbortError') {
-          console.error('Error loading forecast products:', err)
           setError(err.message)
         }
       } finally {

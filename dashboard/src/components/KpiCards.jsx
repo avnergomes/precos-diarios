@@ -1,21 +1,47 @@
 import { DollarSign, TrendingUp, TrendingDown, Package, BarChart3 } from 'lucide-react'
-import { formatCurrency, formatNumber } from '../utils/format'
+import { formatCurrency, formatNumber, getUnitForProduct } from '../utils/format'
 
 export default function KpiCards({ aggregations, contextLabel = 'recorte atual' }) {
   // Calculate YoY variation
   const yoyChange = aggregations?.yoyChange || 0
   const yoyFormatted = yoyChange >= 0 ? `+${yoyChange.toFixed(1)}%` : `${yoyChange.toFixed(1)}%`
 
+  // Detect mixed units across topProducts — when units differ, avgPrice is misleading
+  const topProducts = aggregations?.topProducts || []
+  const units = new Set(topProducts.map(p => p.unidade || getUnitForProduct(p.produto)))
+  const hasMixedUnits = units.size > 1
+
+  // Median YoY variation across topProducts (used when units are mixed)
+  const variations = topProducts.map(p => p.variacao).filter(v => v != null).sort((a, b) => a - b)
+  const medianVariacao = variations.length > 0
+    ? variations[Math.floor(variations.length / 2)]
+    : null
+  const medianFormatted = medianVariacao != null
+    ? (medianVariacao >= 0 ? `+${medianVariacao.toFixed(1)}%` : `${medianVariacao.toFixed(1)}%`)
+    : 'N/D'
+
+  const firstCard = hasMixedUnits
+    ? {
+        title: 'Variação mediana',
+        value: medianFormatted,
+        description: `Mediana dos produtos no ${contextLabel}`,
+        icon: medianVariacao != null && medianVariacao >= 0 ? TrendingUp : TrendingDown,
+        color: medianVariacao != null && medianVariacao >= 0 ? 'from-sky-500 to-sky-600' : 'from-orange-500 to-orange-600',
+        iconBg: medianVariacao != null && medianVariacao >= 0 ? 'bg-sky-100' : 'bg-orange-100',
+        iconColor: medianVariacao != null && medianVariacao >= 0 ? 'text-sky-700' : 'text-orange-700',
+      }
+    : {
+        title: 'Preço médio (R$)',
+        value: formatCurrency(aggregations?.avgPrice || 0),
+        description: `Média no ${contextLabel}`,
+        icon: DollarSign,
+        color: 'from-primary-500 to-primary-600',
+        iconBg: 'bg-primary-100',
+        iconColor: 'text-primary-600',
+      }
+
   const cards = [
-    {
-      title: 'Preço médio (R$)',
-      value: formatCurrency(aggregations?.avgPrice || 0),
-      description: `Média no ${contextLabel}`,
-      icon: DollarSign,
-      color: 'from-primary-500 to-primary-600',
-      iconBg: 'bg-primary-100',
-      iconColor: 'text-primary-600',
-    },
+    firstCard,
     {
       // Alta/queda em azul/laranja (padrão daltônico do ecossistema);
       // os ícones TrendingUp/Down dão a redundância não cromática.

@@ -15,8 +15,8 @@ import Loading from './components/Loading'
 import SectionNav from './components/SectionNav'
 // Advanced D3 Charts
 import ChartFallback from './components/ChartFallback'
-import { formatCategoryName, formatCurrency } from './utils/format'
-import { TrendingUp, BarChart3, Package, LineChart, Radar } from 'lucide-react'
+import { formatCategoryName } from './utils/format'
+import { TrendingUp, BarChart3, Package, LineChart } from 'lucide-react'
 
 // Graficos carregados sob demanda. recharts + d3 respondiam pela maior parte
 // dos 788 kB do bundle inicial, e como a pagina e renderizada no cliente nada
@@ -42,6 +42,7 @@ function App() {
     regionalDetailError,
     loadDetail,
     detailLoading,
+    detailError,
   } = useData()
   const [filters, setFilters] = useState({
     anoMin: null,
@@ -56,11 +57,15 @@ function App() {
     if (filters.regional) loadRegionalDetail()
   }, [filters.regional, loadRegionalDetail])
 
-  // detailed.json (~4,5 MB) idem: só é necessário quando há filtro, porque a
-  // visão sem filtro é servida inteiramente pelos agregados.
+  // detailed.json (~7 MB) idem: só é necessário quando há filtro não-regional,
+  // porque a visão sem filtro é servida pelos agregados e a regional usa
+  // detailed_regional.json. Filtro exclusivamente regional não precisa de detailed.json.
+  const hasNonRegionalFilters = Boolean(
+    filters.produto || filters.categoria || filters.anoMin || filters.anoMax
+  )
   useEffect(() => {
-    if (hasActiveFilters(filters)) loadDetail()
-  }, [filters, loadDetail])
+    if (hasNonRegionalFilters) loadDetail()
+  }, [hasNonRegionalFilters, loadDetail])
 
   // API Modal state
   const [isApiModalOpen, setIsApiModalOpen] = useState(false)
@@ -68,7 +73,7 @@ function App() {
   // Forecast state
   const [forecastSlug, setForecastSlug] = useState(null)
   const [forecastProductName, setForecastProductName] = useState(null)
-  const [forecastHorizon, setForecastHorizon] = useState(90)
+  const [forecastHorizon, setForecastHorizon] = useState(3)
   const { products: forecastProducts } = useForecastProducts()
   const { data: forecastData, loading: forecastLoading, error: forecastError, refetch: refetchForecast } = useForecast(
     forecastSlug,
@@ -76,10 +81,10 @@ function App() {
   )
 
   const filteredData = useFilteredData(data, filters)
-  const aggregations = useAggregations(filteredData, data)
+  const aggregations = useAggregations(filteredData, data, hasActiveFilters(filters))
   const filteredTimeSeries = useFilteredTimeSeries(filteredData, data)
   // "Últimos Preços" vem de latest.json, que traz o dia completo. Antes saía de
-  // detailed.json, que é amostrado, e por isso omitia cotações do dia.
+  // detailed.json, e por isso omitia cotações do dia.
   // Os filtros de categoria/produto continuam valendo aqui, como antes; são
   // poucas dezenas de registros, então filtrar em memória é trivial.
   const latestRecords = useMemo(() => {
@@ -220,6 +225,20 @@ function App() {
             Carregando o detalhamento por registro para aplicar os filtros...
           </div>
         )}
+        {!detailLoading && detailError && hasActiveFilters(filters) && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-sm flex flex-wrap items-center justify-between gap-3">
+            <span>
+              Não foi possível carregar o detalhamento. Os gráficos continuam mostrando os dados agregados sem aplicar os filtros.
+            </span>
+            <button
+              type="button"
+              onClick={loadDetail}
+              className="btn-secondary shrink-0"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
 
         {/* Global No Data Banner. Só faz sentido depois que o detalhamento
             chegou; antes disso a lista vazia significa "ainda carregando". */}
@@ -267,6 +286,7 @@ function App() {
 
           <SeasonalHeatmap
             data={filteredData}
+            timeseriesData={data?.timeseries?.by_period}
             title="Sazonalidade (meses x anos)"
             description="Intensidade de preços por mês e ano."
           />
@@ -306,9 +326,10 @@ function App() {
             <Suspense fallback={<ChartFallback />}>
               <CategoryChart
                 data={aggregations?.byCategory}
-                title="Preço médio por categoria"
-                description="Comparação entre categorias."
-                xAxisLabel="Preço médio (R$)"
+                title="Registros por categoria"
+                description="Volume de cotações por categoria. Preços não são comparáveis entre categorias (unidades diferentes)."
+                metric="registros"
+                xAxisLabel="Registros"
                 onCategoriaClick={handleCategoriaClick}
                 selectedCategoria={filters.categoria}
               />
@@ -316,9 +337,10 @@ function App() {
             <Suspense fallback={<ChartFallback />}>
               <CategoryChart
                 data={aggregations?.byCategory}
-                title="Distribuição de registros"
-                description="Participação por categoria."
-                showPie
+                title="Produtos por categoria"
+                description="Número de produtos acompanhados em cada categoria."
+                metric="produtos"
+                xAxisLabel="Produtos"
                 onCategoriaClick={handleCategoriaClick}
                 selectedCategoria={filters.categoria}
               />
@@ -332,9 +354,6 @@ function App() {
                 <thead>
                   <tr className="table-header">
                     <th className="px-4 py-3 text-left">Categoria</th>
-                    <th className="px-4 py-3 text-right">Preço médio</th>
-                    <th className="px-4 py-3 text-right">Mínimo</th>
-                    <th className="px-4 py-3 text-right">Máximo</th>
                     <th className="px-4 py-3 text-right">Registros</th>
                     <th className="px-4 py-3 text-right">Produtos</th>
                   </tr>
@@ -346,20 +365,15 @@ function App() {
                       <tr
                         key={cat}
                         onClick={() => handleCategoriaClick(cat)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCategoriaClick(cat) } }}
+                        tabIndex={0}
+                        role="row"
+                        aria-selected={filters.categoria === cat}
                         className={`table-row cursor-pointer hover:bg-primary-50 ${
                           filters.categoria === cat ? 'bg-primary-100 ring-1 ring-primary-400' : ''
                         }`}
                       >
                         <td className="px-4 py-3 font-medium">{formatCategoryName(cat)}</td>
-                        <td className="px-4 py-3 text-right">
-                          {formatCurrency(stats.media)}
-                        </td>
-                        <td className="px-4 py-3 text-right text-dark-500">
-                          {stats.minimo == null ? '—' : formatCurrency(stats.minimo)}
-                        </td>
-                        <td className="px-4 py-3 text-right text-dark-500">
-                          {stats.maximo == null ? '—' : formatCurrency(stats.maximo)}
-                        </td>
                         <td className="px-4 py-3 text-right">
                           {stats.registros?.toLocaleString('pt-BR')}
                         </td>
@@ -428,10 +442,11 @@ function App() {
           <div className="card p-4">
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1">
-                <label className="block text-sm font-medium text-dark-600 mb-1">
+                <label htmlFor="forecast-produto" className="block text-sm font-medium text-dark-600 mb-1">
                   Produto para previsão
                 </label>
                 <select
+                  id="forecast-produto"
                   value={forecastSlug || ''}
                   onChange={(e) => {
                     const slug = e.target.value || null
@@ -449,19 +464,19 @@ function App() {
               </div>
 
               <div className="w-full sm:w-48">
-                <label className="block text-sm font-medium text-dark-600 mb-1">
+                <label htmlFor="forecast-horizonte" className="block text-sm font-medium text-dark-600 mb-1">
                   Horizonte
                 </label>
                 <select
+                  id="forecast-horizonte"
                   value={forecastHorizon}
                   onChange={(e) => setForecastHorizon(parseInt(e.target.value))}
                   className="filter-select"
                 >
-                  <option value={30}>30 dias</option>
-                  <option value={60}>60 dias</option>
-                  <option value={90}>90 dias</option>
-                  <option value={180}>180 dias</option>
-                  <option value={365}>1 ano</option>
+                  <option value={1}>1 mês</option>
+                  <option value={3}>3 meses</option>
+                  <option value={6}>6 meses</option>
+                  <option value={12}>12 meses</option>
                 </select>
               </div>
               <div className="w-full sm:w-48 flex items-end">

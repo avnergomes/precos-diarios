@@ -38,6 +38,13 @@ export default function Filters({ filters, setFilters, options, metadata, hasReg
         [key]: value,
       }
 
+      // Swap year range if inverted
+      if ((key === 'anoMin' || key === 'anoMax') && next.anoMin && next.anoMax && next.anoMin > next.anoMax) {
+        const tmp = next.anoMin
+        next.anoMin = next.anoMax
+        next.anoMax = tmp
+      }
+
       // Clear product if category changes and product is not in new category
       if (key === 'categoria' && next.produto && next.categoria) {
         const allowed = categoryProducts[next.categoria] || []
@@ -180,6 +187,7 @@ export default function Filters({ filters, setFilters, options, metadata, hasReg
               <button
                 key={preset.label}
                 onClick={() => applyPreset(preset)}
+                aria-pressed={isPresetActive(preset)}
                 className={`filter-chip ${isPresetActive(preset) ? 'filter-chip-active' : ''}`}
               >
                 {preset.label}
@@ -217,7 +225,7 @@ export default function Filters({ filters, setFilters, options, metadata, hasReg
           <div>
             <label className="block text-sm font-medium text-dark-600 mb-2 flex items-center gap-2">
               <MapPin className="w-4 h-4" />
-              Regional (Nucleo IDR-PR)
+              Núcleo Regional SEAB/DERAL
               {!hasRegionalData && (
                 <span className="text-xs text-dark-400 font-normal">(dados agregados)</span>
               )}
@@ -227,6 +235,7 @@ export default function Filters({ filters, setFilters, options, metadata, hasReg
                 <button
                   key={reg}
                   onClick={() => toggleRegional(reg)}
+                  aria-pressed={filters.regional === reg}
                   className={`filter-chip ${filters.regional === reg ? 'filter-chip-active' : ''}`}
                 >
                   {reg}
@@ -260,6 +269,7 @@ export default function Filters({ filters, setFilters, options, metadata, hasReg
               <button
                 key={cat}
                 onClick={() => toggleCategoria(cat)}
+                aria-pressed={filters.categoria === cat}
                 className={`filter-chip ${filters.categoria === cat ? 'filter-chip-active' : ''}`}
               >
                 {formatCategoryName(cat)}
@@ -305,6 +315,7 @@ export default function Filters({ filters, setFilters, options, metadata, hasReg
               <button
                 key={prod}
                 onClick={() => toggleProduto(prod)}
+                aria-pressed={filters.produto === prod}
                 className={`filter-chip text-sm ${filters.produto === prod ? 'filter-chip-active' : ''}`}
                 title={prod}
               >

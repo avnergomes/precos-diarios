@@ -24,6 +24,7 @@ const MODEL_STYLES = {
   random_forest: { color: '#E69F00', dash: '10 4 2 4', label: 'Random Forest' },
   xgboost:       { color: '#D55E00', dash: '4 3 1 3',  label: 'XGBoost' },
   prophet:       { color: '#56B4E9', dash: '14 4',     label: 'Prophet' },
+  baseline_naive: { color: '#9CA3AF', dash: '1 3',     label: 'Baseline sazonal ingênuo' },
 }
 
 const FALLBACK_COLORS = ATLAS_CATEGORICAL
@@ -46,6 +47,51 @@ function formatDateLabel(dateStr) {
   return `${month}/${year}`
 }
 
+function ForecastChartTooltip({ active, payload, sortedModelKeys, visibleModels, modelKeys, bestModel }) {
+  if (!active || !payload || payload.length === 0) return null
+  const dp = payload[0]?.payload
+
+  return (
+    <div className="bg-white/95 backdrop-blur-sm p-3 rounded-xl shadow-lg border border-dark-100 min-w-[200px]">
+      <p className="font-semibold text-dark-800 mb-2 text-sm">{dp?.label}</p>
+
+      {dp?.historico != null && (
+        <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-dark-100">
+          <span className="w-2.5 h-2.5 rounded-full bg-dark-800 shrink-0" />
+          <span className="text-sm text-dark-600">Histórico</span>
+          <span className="text-sm font-semibold text-dark-800 ml-auto">{formatCurrency(dp.historico)}</span>
+        </div>
+      )}
+
+      <div className="space-y-1">
+        {sortedModelKeys.map((key) => {
+          if (dp?.[key] == null || !visibleModels[key]) return null
+          const style = getModelStyle(key, modelKeys.indexOf(key))
+          const isBest = key === bestModel
+          return (
+            <div key={key} className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: style.color }} />
+              <span className="text-xs text-dark-600 truncate">
+                {style.label}
+                {isBest && <span className="text-[10px] font-medium text-amber-600 ml-1">★</span>}
+              </span>
+              <span className="text-xs font-semibold ml-auto" style={{ color: style.color }}>
+                {formatCurrency(dp[key])}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+
+      {bestModel && visibleModels[bestModel] && dp?.[`${bestModel}_lower`] != null && dp?.[bestModel] != null && (
+        <div className="mt-2 pt-1.5 border-t border-dark-100 text-[10px] text-dark-400">
+          IC 95%: {formatCurrency(dp[`${bestModel}_lower`])} – {formatCurrency(dp[`${bestModel}_upper`])}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ForecastChart({
   historico = [],
   modelos = {},
@@ -58,26 +104,28 @@ export default function ForecastChart({
     Object.fromEntries(modelKeys.map(k => [k, true]))
   )
 
-  // Find best model by R²
+  // Find best model: use explicit best_model flag first, then fall back to lowest MAE
   const bestModel = useMemo(() => {
+    const flagged = modelKeys.find(k => modelos[k]?.best_model)
+    if (flagged) return flagged
     let best = null
-    let bestR2 = -Infinity
+    let bestMAE = Infinity
     for (const key of modelKeys) {
-      const r2 = modelos[key]?.metricas?.r2
-      if (r2 != null && r2 > bestR2) {
-        bestR2 = r2
+      const mae = modelos[key]?.metricas?.mae
+      if (mae != null && mae < bestMAE) {
+        bestMAE = mae
         best = key
       }
     }
     return best
   }, [modelos, modelKeys])
 
-  // Sort model keys by R² (best first) for tooltip ordering
+  // Sort model keys by MAE (lowest = best first) for tooltip ordering
   const sortedModelKeys = useMemo(() => {
     return [...modelKeys].sort((a, b) => {
-      const r2a = modelos[a]?.metricas?.r2 ?? -1
-      const r2b = modelos[b]?.metricas?.r2 ?? -1
-      return r2b - r2a
+      const maeA = modelos[a]?.metricas?.mae ?? Infinity
+      const maeB = modelos[b]?.metricas?.mae ?? Infinity
+      return maeA - maeB
     })
   }, [modelos, modelKeys])
 
@@ -151,53 +199,6 @@ export default function ForecastChart({
     ? chartData[chartData.length - 1].label
     : null
 
-  // Custom tooltip
-  const CustomTooltip = ({ active, payload }) => {
-    if (!active || !payload || payload.length === 0) return null
-    const dp = payload[0]?.payload
-
-    return (
-      <div className="bg-white/95 backdrop-blur-sm p-3 rounded-xl shadow-lg border border-dark-100 min-w-[200px]">
-        <p className="font-semibold text-dark-800 mb-2 text-sm">{dp?.label}</p>
-
-        {dp?.historico != null && (
-          <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-dark-100">
-            <span className="w-2.5 h-2.5 rounded-full bg-dark-800 shrink-0" />
-            <span className="text-sm text-dark-600">Histórico</span>
-            <span className="text-sm font-semibold text-dark-800 ml-auto">{formatCurrency(dp.historico)}</span>
-          </div>
-        )}
-
-        <div className="space-y-1">
-          {sortedModelKeys.map((key, i) => {
-            if (dp?.[key] == null || !visibleModels[key]) return null
-            const style = getModelStyle(key, modelKeys.indexOf(key))
-            const isBest = key === bestModel
-            return (
-              <div key={key} className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: style.color }} />
-                <span className="text-xs text-dark-600 truncate">
-                  {style.label}
-                  {isBest && <span className="text-[10px] font-medium text-amber-600 ml-1">★</span>}
-                </span>
-                <span className="text-xs font-semibold ml-auto" style={{ color: style.color }}>
-                  {formatCurrency(dp[key])}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Show IC for best visible model */}
-        {bestModel && visibleModels[bestModel] && dp?.[`${bestModel}_lower`] != null && dp?.[bestModel] != null && (
-          <div className="mt-2 pt-1.5 border-t border-dark-100 text-[10px] text-dark-400">
-            IC 95%: {formatCurrency(dp[`${bestModel}_lower`])} – {formatCurrency(dp[`${bestModel}_upper`])}
-          </div>
-        )}
-      </div>
-    )
-  }
-
   if (chartData.length === 0) {
     return (
       <div className="card p-6">
@@ -255,6 +256,7 @@ export default function ForecastChart({
         })}
       </div>
 
+      <div role="img" aria-label={`Gráfico de previsão: ${title}`}>
       <ResponsiveContainer width="100%" height={height}>
         <ComposedChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 0 }}>
           <defs>
@@ -296,7 +298,14 @@ export default function ForecastChart({
             width={65}
           />
 
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={
+            <ForecastChartTooltip
+              sortedModelKeys={sortedModelKeys}
+              visibleModels={visibleModels}
+              modelKeys={modelKeys}
+              bestModel={bestModel}
+            />
+          } />
 
           {/* Divider line */}
           {lastHistLabel && (
@@ -365,6 +374,7 @@ export default function ForecastChart({
           })}
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
     </div>
   )
 }

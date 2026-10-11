@@ -78,17 +78,23 @@ export async function fetchData(path, opts) {
     : [{ url: STATIC_BASE + path, timeout: 0, isStatic: true }]
 
   let lastError
+  // Track whether the live API had a "real" failure (network/timeout/5xx),
+  // distinct from a 404 (file simply not hosted). Only real failures warrant
+  // the "servidor indisponível" banner.
+  let apiRealFailure = false
   for (const candidate of candidates) {
     try {
       const response = await fetchWithTimeout(candidate.url, opts, candidate.timeout)
       if (response.ok) {
-        if (candidate.isStatic && API_BASE) staticFallbackUsed = true
+        if (candidate.isStatic && API_BASE && apiRealFailure) staticFallbackUsed = true
         return await response.json()
       }
       lastError = new Error(`HTTP ${response.status} for ${path}`)
+      if (!candidate.isStatic && response.status !== 404) apiRealFailure = true
     } catch (err) {
       if (err.name === 'AbortError') throw err
       lastError = err
+      if (!candidate.isStatic) apiRealFailure = true
     }
   }
   throw lastError || new Error(`Failed to load ${path}`)

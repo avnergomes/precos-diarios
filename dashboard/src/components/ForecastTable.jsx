@@ -8,6 +8,7 @@ const MODEL_LABELS = {
   random_forest: 'Random Forest',
   xgboost: 'XGBoost',
   prophet: 'Prophet',
+  baseline_naive: 'Baseline',
 }
 
 const MODEL_COLORS = {
@@ -17,6 +18,7 @@ const MODEL_COLORS = {
   random_forest: 'text-orange-600',
   xgboost: 'text-orange-800',
   prophet: 'text-sky-800',
+  baseline_naive: 'text-gray-500',
 }
 
 export default function ForecastTable({

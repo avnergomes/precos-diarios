@@ -2,6 +2,11 @@ import { useMemo, useState } from 'react'
 import { Search, ChevronUp, ChevronDown } from 'lucide-react'
 import { formatCategoryName, formatCurrency, formatNumber, getUnitForProduct } from '../utils/format'
 
+function SortIconLatest({ column, sortBy, sortOrder }) {
+  if (sortBy !== column) return null
+  return sortOrder === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return ''
   const date = new Date(dateStr + 'T12:00:00')
@@ -79,11 +84,6 @@ export default function LatestPrices({ records }) {
     }
   }
 
-  const SortIcon = ({ column }) => {
-    if (sortBy !== column) return null
-    return sortOrder === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
-  }
-
   if (!latestDate) {
     return (
       <div className="chart-container">
@@ -142,7 +142,7 @@ export default function LatestPrices({ records }) {
               >
                 <span className="flex items-center gap-1">
                   Produto
-                  <SortIcon column="produto" />
+                  <SortIconLatest column="produto" sortBy={sortBy} sortOrder={sortOrder} />
                 </span>
               </th>
               <th className="px-3 py-3 text-left">Categoria</th>
@@ -152,7 +152,7 @@ export default function LatestPrices({ records }) {
               >
                 <span className="flex items-center justify-end gap-1">
                   Preço
-                  <SortIcon column="preco" />
+                  <SortIconLatest column="preco" sortBy={sortBy} sortOrder={sortOrder} />
                 </span>
               </th>
               <th className="px-3 py-3 text-right">Unidade</th>

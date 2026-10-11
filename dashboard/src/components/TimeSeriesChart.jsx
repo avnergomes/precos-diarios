@@ -12,6 +12,22 @@ import {
 } from 'recharts'
 import { formatCurrency, formatPeriod } from '../utils/format'
 
+function TimeSeriesChartTooltip({ active, payload, label }) {
+  if (!active || !payload || !payload.length) return null
+  return (
+    <div className="bg-white/95 backdrop-blur-sm border border-dark-200 rounded-lg shadow-lg p-3">
+      <p className="font-semibold text-dark-800 mb-2">
+        {formatPeriod(label)}
+      </p>
+      {payload.map((entry, index) => (
+        <p key={index} className="text-sm" style={{ color: entry.color }}>
+          {entry.name}: {formatCurrency(entry.value)}
+        </p>
+      ))}
+    </div>
+  )
+}
+
 export default function TimeSeriesChart({
   data,
   title,
@@ -57,23 +73,6 @@ export default function TimeSeriesChart({
     })
     .sort((a, b) => a.period.localeCompare(b.period))
 
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (!active || !payload || !payload.length) return null
-
-    return (
-      <div className="bg-white/95 backdrop-blur-sm border border-dark-200 rounded-lg shadow-lg p-3">
-        <p className="font-semibold text-dark-800 mb-2">
-          {formatPeriod(label)}
-        </p>
-        {payload.map((entry, index) => (
-          <p key={index} className="text-sm" style={{ color: entry.color }}>
-            {entry.name}: {formatCurrency(entry.value)}
-          </p>
-        ))}
-      </div>
-    )
-  }
-
   return (
     <div className="chart-container">
       <h3 className="chart-title">{title}</h3>
@@ -81,6 +80,7 @@ export default function TimeSeriesChart({
         <p className="text-sm text-dark-500 mb-4">{description}</p>
       )}
 
+      <div role="img" aria-label={`Gráfico de série temporal: ${title || 'evolução de preços'}`}>
       <ResponsiveContainer width="100%" height={height}>
         {showMinMax ? (
           <AreaChart
@@ -121,7 +121,7 @@ export default function TimeSeriesChart({
                 style={{ fill: '#6e6453', fontSize: 11 }}
               />
             </YAxis>
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<TimeSeriesChartTooltip />} />
             <Legend />
             <Area
               type="monotone"
@@ -189,7 +189,7 @@ export default function TimeSeriesChart({
                 style={{ fill: '#6e6453', fontSize: 11 }}
               />
             </YAxis>
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<TimeSeriesChartTooltip />} />
             <Area
               type="monotone"
               dataKey="media"
@@ -201,6 +201,7 @@ export default function TimeSeriesChart({
           </AreaChart>
         )}
       </ResponsiveContainer>
+      </div>
 
       {selectedPeriod && (
         <p className="text-xs text-center text-primary-600 mt-2 font-medium">

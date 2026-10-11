@@ -149,7 +149,7 @@ export default function CircularBarChart({
           ))}
 
           {/* Bars */}
-          {monthlyData.map((d, i) => {
+          {monthlyData.map((d) => {
             const arcPath = arcGenerator({
               innerRadius: innerRadius,
               outerRadius: yScale(d.value),
