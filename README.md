@@ -1,81 +1,102 @@
-# Preços Diários — Cotações Agrícolas do Paraná
+# Precos Diarios - Cotacoes Agricolas do Parana
 
-Dashboard de cotações diárias de preços agrícolas do Paraná, com séries históricas de 2003 a 2026 e previsões geradas por machine learning. Cobre 22 produtos monitorados pelo SIMA/SEAB.
+Dashboard de cotacoes diarias de precos agricolas do Parana, com series historicas de 2003 ate o presente e previsoes geradas por machine learning, cobrindo produtos monitorados pelo SIMA/SEAB.
 
-**🔗 [Acessar dashboard](https://avnergomes.github.io/precos-diarios/)**
+**[Acessar dashboard](https://avnergomes.github.io/precos-diarios/)**
 
-Parte do ecossistema **[Datageo Paraná](https://datageoparana.github.io)**.
+Parte do ecossistema **[Datageo Parana](https://datageoparana.github.io)**.
 
 ## Sobre
 
-O Sistema de Informação de Mercado Agrícola (SIMA) da SEAB coleta cotações diárias de produtos agropecuários em diversas praças do Paraná. Este dashboard consolida mais de duas décadas de preços, tornando acessível a análise de tendências, sazonalidade e variações de mercado para produtores, pesquisadores e gestores públicos.
+O Sistema de Informacao de Mercado Agricola (SIMA) da SEAB coleta cotacoes diarias de produtos agropecuarios em diversas pracas do Parana. Este dashboard consolida mais de duas decadas de precos, tornando acessivel a analise de tendencias, sazonalidade e variacoes de mercado para produtores, pesquisadores e gestores publicos.
 
-Além da série histórica, o dashboard incorpora previsões de curto prazo geradas por modelos de machine learning, heatmap de sazonalidade mensal e sparklines de variação recente por produto. Uma API própria permite a consulta programática dos dados.
-
-O pipeline de dados é composto por múltiplos scripts Python que fazem o download, a limpeza e a geração de previsões, com execução automatizada via GitHub Actions.
+Alem da serie historica, o dashboard incorpora previsoes de curto prazo geradas por modelos de machine learning, heatmap de sazonalidade mensal e sparklines de variacao recente por produto. Uma API propria permite a consulta programatica dos dados.
 
 ## Fonte de Dados
 
-- **SIMA/SEAB** — Sistema de Informação de Mercado Agrícola da Secretaria da Agricultura e do Abastecimento do Paraná
-- Período: 2003–2026
-- Atualização: diária (workflow automatizado)
+- **SIMA/SEAB** - Sistema de Informacao de Mercado Agricola da Secretaria da Agricultura e do Abastecimento do Parana
+- Periodo: 2003-presente
+- Atualizacao: diaria (workflow automatizado, dias uteis)
 
 ## Tecnologias
 
 | Camada | Tecnologia |
 |--------|-----------|
 | Frontend | React 18, Vite 5, Tailwind CSS 3 |
-| Gráficos | Recharts, D3.js |
-| Mapas | — |
+| Graficos | Recharts, D3.js |
 | Pipeline | Python (Pandas, machine learning) |
+| API | Flask + Gunicorn, deploy no Render |
 | Deploy | GitHub Pages via GitHub Actions |
-| Tracking | LGPD-compliant (19 métricas anônimas) |
+| Tracking | LGPD-compliant (metricas anonimas) |
 
 ## Estrutura do Projeto
 
 ```
 precos-diarios/
-├── dashboard/          # Aplicação React
+├── dashboard/          # Aplicacao React
 │   ├── src/
 │   │   ├── App.jsx
-│   │   ├── components/ # 20 componentes
+│   │   ├── components/
 │   │   └── hooks/      # useData.js, useForecast.js
-│   ├── public/
-│   │   └── data/       # JSONs processados
-│   └── index.html
-├── scripts/            # Pipeline de dados (Python)
-│   ├── download_data.py
-│   ├── etl_process.py
-│   ├── preprocess_data.py
-│   ├── generate_forecasts.py
-│   ├── run_pipeline.py
-│   ├── update_data.py
-│   └── backfill_2025.py
-├── api/                # Backend de API
-│   ├── app.py
+│   └── public/
+│       ├── data/       # JSONs processados (aggregated, daily_series, etc.)
+│       └── assets/     # og-image.png e outros assets estaticos
+├── api/                # Backend de API (Render)
+│   ├── app_v2.py       # Entrypoint Flask
 │   ├── scraper.py
 │   ├── forecast.py
-│   └── etl_process.py
+│   ├── preprocess_data.py
+│   └── etl_regional.py
+├── scripts/            # Orquestracao do pipeline
+│   ├── update_data.py  # Ponto de entrada do workflow diario
+│   ├── generate_forecasts.py
+│   └── download_data.py
+├── data/
+│   └── processed/
+│       ├── regional/           # consolidated_regional_YYYY.csv (particionado por ano)
+│       └── quarantine.csv      # registros rejeitados pela validacao
+├── tests/              # Testes Python (pytest)
+├── requirements.txt
+├── requirements-dev.txt
+├── requirements-forecast.txt   # Prophet e dependencias pesadas (uso local)
 ├── .github/workflows/  # CI/CD
 │   ├── data-pipeline.yml
 │   ├── deploy.yml
 │   ├── forecast.yml
 │   ├── lighthouse.yml
 │   ├── link-check.yml
-│   └── seo-check.yml
-└── README.md
+│   ├── seo-check.yml
+│   └── tests.yml
+└── render.yaml         # Configuracao do servico Render
 ```
+
+## Fluxo de Dados
+
+O workflow `data-pipeline.yml` roda automaticamente em dias uteis:
+
+1. **Scraper** (`scripts/update_data.py` via `api/scraper.py`) coleta os arquivos do SIMA/SEAB.
+2. **ETL** (`api/etl_process.py`) limpa e transforma os dados brutos.
+3. **Validacao** rejeita registros invalidos para `data/processed/quarantine.csv`.
+4. **Preprocess** (`api/preprocess_data.py`) gera os JSONs para o dashboard.
+5. **Forecasts** (`scripts/generate_forecasts.py`) atualiza as previsoes de curto prazo.
+6. O resultado e commitado e o workflow `deploy.yml` e acionado, publicando no GitHub Pages.
+
+O workflow `forecast.yml` regera as previsoes toda segunda-feira para incorporar dados da semana anterior.
+
+A **API REST** (`https://precos-diarios-api.onrender.com`) serve os mesmos JSONs processados e funciona como fonte primaria para o dashboard, com fallback automatico para os arquivos estaticos do build.
+
+O arquivo `links.txt` na raiz e estado interno do scraper (gerado diariamente por `api/scraper.py`); nao editar manualmente.
 
 ## Funcionalidades
 
-- Séries históricas diárias de 22 produtos agrícolas (2003–2026)
-- Previsões de curto prazo com machine learning
+- Series historicas diarias de produtos agricolas (2003-presente)
+- Previsoes de curto prazo com machine learning
 - Heatmap de sazonalidade mensal por produto
-- Sparklines de variação recente
-- Painel de últimos preços registrados
-- Filtros por produto, período e categoria
-- API para consulta programática dos dados
-- KPIs de preço médio, variação anual, total de registros e produtos monitorados
+- Sparklines de variacao recente
+- Painel de ultimos precos registrados
+- Filtros por produto, periodo e categoria
+- API para consulta programatica dos dados
+- KPIs de preco medio, variacao anual, total de registros e produtos monitorados
 
 ## Desenvolvimento Local
 
@@ -84,20 +105,27 @@ precos-diarios/
 git clone https://github.com/avnergomes/precos-diarios.git
 cd precos-diarios/dashboard
 
-# Instalar dependências
+# Instalar dependencias
 npm install
 
 # Rodar em desenvolvimento
 npm run dev
 
-# Build para produção
+# Build para producao
 npm run build
 ```
 
-## Pipeline de Dados
+Para rodar o pipeline Python localmente:
 
-O pipeline em `scripts/` opera em etapas: `download_data.py` coleta os dados brutos do SIMA, `etl_process.py` realiza a limpeza e transformação, `preprocess_data.py` gera os agregados e `generate_forecasts.py` produz as previsões por produto. O orquestrador `run_pipeline.py` encadeia todas as etapas. Os JSONs resultantes (`aggregated.json`, `daily_series.json`, `detailed.json`, `detailed_regional.json`, `filters.json`, `forecast_products.json` e `forecasts/*.json`) são gravados em `dashboard/public/data/`. Os workflows `data-pipeline.yml` e `forecast.yml` automatizam a execução no GitHub Actions.
+```bash
+pip install -r requirements.txt
+python scripts/update_data.py
+```
 
-## Licença
+## Tamanho do Repositorio
 
-Dados públicos. Dashboard desenvolvido por [Avner Gomes](https://avnergomes.github.io/portfolio/).
+O historico contem commits diarios de CSVs e JSONs desde 2003, resultando em um pacote Git de ~220 MB. A particao do CSV regional por ano (regional/consolidated_regional_YYYY.csv) reduz o crescimento daqui em diante. A limpeza do historico com `git filter-repo` e uma opcao viavel para o futuro, a criterio do dono do repositorio.
+
+## Licenca
+
+Dados publicos. Dashboard desenvolvido por [Avner Gomes](https://avnergomes.github.io/portfolio/).

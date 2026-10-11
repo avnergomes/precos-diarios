@@ -2,7 +2,8 @@ name: Update Forecasts
 
 on:
   schedule:
-    - cron: '0 6 * * 1'  # Segundas às 6h UTC
+    # Segundas as ~5:43 UTC. Minuto nao-redondo reduz filas; intencao original era 6h UTC.
+    - cron: '43 5 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -20,9 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -43,13 +44,25 @@ jobs:
             echo "changed=false" >> $GITHUB_OUTPUT
           else
             git commit -m "chore: update forecasts [skip ci]"
-            git push
+            for attempt in 1 2 3; do
+              git pull --rebase origin main
+              if git push; then
+                echo "::notice::Push succeeded on attempt $attempt."
+                break
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                echo "::error::Push failed after 3 attempts."
+                exit 1
+              fi
+              echo "::warning::Push attempt $attempt failed, retrying in $((attempt * 15))s..."
+              sleep $((attempt * 15))
+            done
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Trigger deploy workflow
         if: steps.commit.outputs.changed == 'true'
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             // Retry: concurrent dispatches from data-pipeline.yml can transiently 409/500.
